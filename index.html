@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>VFT3 Handheld Receiver v5</title>
+<title>VFT4 Handheld Receiver v6</title>
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;background:#111;color:#eee}
 body{margin:0;padding:12px;background:#111} h1{font-size:20px;margin:0 0 10px}.card{background:#1d1d20;border:1px solid #333;border-radius:12px;padding:12px;margin-bottom:10px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}button,select{font:inherit;border-radius:9px;border:1px solid #555;background:#29292d;color:#fff;padding:9px 12px}button.primary{background:#1769e0}button.danger{background:#7c2730}video{width:100%;display:block;border-radius:10px;background:#000}.stage{position:relative}.stage canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.small{font-size:12px;color:#bbb;line-height:1.45}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}.good{color:#65dc83}.warn{color:#ffd166}.bad{color:#ff7373}progress{width:100%;height:16px}.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;font-size:12px}.stat{background:#151518;padding:7px;border-radius:7px}.badge{font-size:11px;background:#333;border-radius:999px;padding:3px 7px}
 </style>
 </head>
 <body>
-<h1>Visual File Receiver <span class="badge">VFT3 handheld v5</span></h1>
+<h1>Visual File Receiver <span class="badge">VFT4 handheld v6</span></h1>
 <div class="card">
   <div class="row">
     <button id="startBtn" class="primary">开始扫描</button><button id="stopBtn">停止</button><button id="resetBtn" class="danger">重置</button>
@@ -24,18 +24,18 @@ body{margin:0;padding:12px;background:#111} h1{font-size:20px;margin:0 0 10px}.c
   <div class="stat">锁定状态<br><b id="sLock">NO</b></div><div class="stat">有效包 FPS<br><b id="sFps">0.0</b></div>
   <div class="stat">实时吞吐<br><b id="sLiveRate">0 B/s</b></div><div class="stat">平均吞吐<br><b id="sRate">0 B/s</b></div>
   <div class="stat">预计剩余<br><b id="sEta">--</b></div><div class="stat">CRC/解码失败<br><b id="sErr">0%</b></div>
-  <div class="stat">已恢复块<br><b id="sBlocks">0/0</b></div><div class="stat">修复方程<br><b id="sEq">0</b></div>
-  <div class="stat">直接接收<br><b id="sDirect">0</b></div><div class="stat">XOR 恢复<br><b id="sRepair">0</b></div>
-  <div class="stat">Rescue 恢复<br><b id="sRescue">0</b></div><div class="stat">重复块<br><b id="sDup">0</b></div>
+  <div class="stat">已恢复块<br><b id="sBlocks">0/0</b></div><div class="stat">FEC Parity<br><b id="sEq">0</b></div>
+  <div class="stat">直接接收<br><b id="sDirect">0</b></div><div class="stat">FEC 恢复<br><b id="sFec">0</b></div>
+  <div class="stat">可恢复组<br><b id="sGroups">0</b></div><div class="stat">重复块<br><b id="sDup">0</b></div>
 </div><div id="diag" class="small mono" style="margin-top:8px"></div>
 <div id="missing" class="small mono warn" style="margin-top:8px">Missing: --</div></div>
-<div class="card small">v5 手持优化：持续四角重定位、角点平滑、短时锁定保持、连续失败时快速重定位。VFT3 增加每轮 whitening、XOR repair 和 degree-1 rescue；同一逻辑块每轮会呈现不同视觉纹理，避免固定“难解块”长期卡死。文件仅在浏览器内重组并做 SHA-256 校验。</div>
+<div class="card small">v6 手持优化：持续四角重定位、角点平滑和短时锁定保持。VFT4 使用 GF(256) 分组 FEC（默认 16+8）、交错发送和每轮 whitening。缺失块达到可恢复条件时会立即通过 FEC 补齐；最终仍必须通过整文件 SHA-256 才会标记成功。</div>
 <canvas id="work" style="display:none"></canvas>
 <script>
 (()=>{'use strict';
-const MAGIC0=0x56,MAGIC1=0x46,VERSION=3,HEADER_SIZE=22,BORDER=2,FINDER=7;
-const FRAME_META=1,FRAME_DATA=2,FRAME_REPAIR=3,FRAME_RESCUE=4;
-const DATA_MASK_CONST=0xD1B54A35,REPAIR_MASK_CONST=0xA5A5F00D,RESCUE_MASK_CONST=0x7F4A7C15;
+const MAGIC0=0x56,MAGIC1=0x46,VERSION=4,HEADER_SIZE=22,BORDER=2,FINDER=7;
+const FRAME_META=1,FRAME_DATA=2,FRAME_PARITY=3;
+const DATA_MASK_CONST=0xD1B54A35,PARITY_MASK_CONST=0x6C8E9CF5;
 const PROCESS_MAX=880,DECODE_MS=45,DETECT_NORMAL_MS=260,DETECT_FAST_MS=90,LOCK_TTL=900,SMOOTH=0.38,FAIL_REDETECT=3;
 const FINDERS=[
 [[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],[1,0,1,0,1,0,1],[1,0,1,1,1,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]],
@@ -46,8 +46,8 @@ const $=id=>document.getElementById(id),video=$('video'),overlay=$('overlay'),ct
 const statusEl=$('status'),progressEl=$('progress'),infoEl=$('info'),gridSel=$('grid');
 let stream=null,running=false,raf=0,lastDecode=0,lastDetect=0,lock=null,consecutiveFail=0;
 let attempts=0,valid=0,validTimes=[],bytesAccepted=0,startTs=0,rateEvents=[];
-let sessionId=null,total=0,meta=null,blocks=new Map(),equations=[],completed=false;
-let directRecovered=0,repairRecovered=0,rescueRecovered=0,duplicates=0,lastNewBlockTs=0;
+let sessionId=null,total=0,meta=null,blocks=new Map(),parityGroups=new Map(),completed=false;
+let directRecovered=0,fecRecovered=0,duplicates=0,lastNewBlockTs=0;
 let seenKeys=new Set(),seenQueue=[];
 const coordCache=new Map();
 const CRC_TABLE=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
@@ -55,8 +55,8 @@ function setStatus(t,k='warn'){statusEl.textContent=t;statusEl.className='small 
 function crc32(b){let c=0xffffffff;for(const x of b)c=(CRC_TABLE[(c^x)&255]^(c>>>8))>>>0;return(c^0xffffffff)>>>0}
 function u16(b,o){return(b[o]<<8)|b[o+1]} function u32(b,o){return(((b[o]<<24)>>>0)|(b[o+1]<<16)|(b[o+2]<<8)|b[o+3])>>>0}
 function u64(b,o){let v=0n;for(let i=0;i<8;i++)v=(v<<8n)|BigInt(b[o+i]);return v} function hex(b){return[...b].map(x=>x.toString(16).padStart(2,'0')).join('')}
-function parsePacket(b){if(b.length<HEADER_SIZE)throw Error('short');if(b[0]!==MAGIC0||b[1]!==MAGIC1||b[2]!==VERSION)throw Error('magic/ver');const type=b[3],sid=u32(b,4),idx=u32(b,8),count=u32(b,12),len=u16(b,16),crc=u32(b,18);if(![FRAME_META,FRAME_DATA,FRAME_REPAIR,FRAME_RESCUE].includes(type)||HEADER_SIZE+len>b.length)throw Error('header');const p=b.slice(HEADER_SIZE,HEADER_SIZE+len);if(crc32(p)!==crc)throw Error('crc');return{type,sid,idx,count,payload:p}}
-function parseMeta(p){const nl=u16(p,0),e=2+nl;if(p.length<e+45)throw Error('meta');return{filename:new TextDecoder().decode(p.slice(2,e)),fileSize:u64(p,e),blockSize:u32(p,e+8),sha:p.slice(e+12,e+44),codec:p[e+44]}}
+function parsePacket(b){if(b.length<HEADER_SIZE)throw Error('short');if(b[0]!==MAGIC0||b[1]!==MAGIC1||b[2]!==VERSION)throw Error('magic/ver');const type=b[3],sid=u32(b,4),idx=u32(b,8),count=u32(b,12),len=u16(b,16),crc=u32(b,18);if(![FRAME_META,FRAME_DATA,FRAME_PARITY].includes(type)||HEADER_SIZE+len>b.length)throw Error('header');const p=b.slice(HEADER_SIZE,HEADER_SIZE+len);if(crc32(p)!==crc)throw Error('crc');return{type,sid,idx,count,payload:p}}
+function parseMeta(p){const nl=u16(p,0),e=2+nl;if(p.length<e+47)throw Error('meta');return{filename:new TextDecoder().decode(p.slice(2,e)),fileSize:u64(p,e),blockSize:u32(p,e+8),sha:p.slice(e+12,e+44),codec:p[e+44],fecK:p[e+45],fecR:p[e+46]}}
 function getCoords(n){if(coordCache.has(n))return coordCache.get(n);const r=Array.from({length:n},()=>new Uint8Array(n));for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(y<BORDER||y>=n-BORDER||x<BORDER||x>=n-BORDER)r[y][x]=1;for(const [y,x] of [[BORDER,BORDER],[BORDER,n-BORDER-FINDER],[n-BORDER-FINDER,BORDER],[n-BORDER-FINDER,n-BORDER-FINDER]])for(let yy=Math.max(0,y-1);yy<Math.min(n,y+FINDER+1);yy++)for(let xx=Math.max(0,x-1);xx<Math.min(n,x+FINDER+1);xx++)r[yy][xx]=1;const t=BORDER+FINDER+1;for(let i=BORDER;i<n-BORDER;i++){r[t][i]=1;r[i][t]=1}const cr=n-BORDER-1,cs=BORDER+FINDER+2;for(let i=0;i<16&&cs+i<n;i++)r[cr][cs+i]=1;const out=[];for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(!r[y][x])out.push([y,x]);coordCache.set(n,out);return out}
 function bitsU32(bits,o=0){let v=0;for(let i=0;i<32;i++)v=v*2+(bits[o+i]||0);return v>>>0} function bitsBytes(bits){const o=new Uint8Array(Math.ceil(bits.length/8));for(let i=0;i<bits.length;i++)o[i>>3]|=bits[i]<<(7-(i&7));return o}
 function matrixBytes(m,n){const c=getCoords(n),bits=new Uint8Array(c.length);for(let i=0;i<c.length;i++){const [r,x]=c[i];bits[i]=m[r*n+x]}const len=bitsU32(bits);if(!len||len>bits.length-32)return null;return bitsBytes(bits.slice(32,32+len))}
@@ -75,38 +75,31 @@ function sample(img,n,pts){const f=5.5,h=H([{x:f,y:f},{x:n-f,y:f},{x:n-f,y:n-f},
 function xorshift32(x){x>>>=0;x^=(x<<13)>>>0;x^=x>>>17;x^=(x<<5)>>>0;return x>>>0}
 function whitenBytes(data,seed){let st=(seed>>>0)||0x6D2B79F5,out=new Uint8Array(data.length);for(let i=0;i<data.length;i++){st=xorshift32(st);out[i]=data[i]^(st&255)}return out}
 function seenOnce(type,idx){const k=`${type}:${idx>>>0}`;if(seenKeys.has(k))return true;seenKeys.add(k);seenQueue.push(k);if(seenQueue.length>6000){const old=seenQueue.shift();seenKeys.delete(old)}return false}
-function repairIndices(seed,degree,k){degree=Math.max(1,Math.min(degree,k));const out=[];let st=(seed>>>0)||0xA341316C;while(out.length<degree){st=xorshift32(st);const i=st%k;if(!out.includes(i))out.push(i)}return out}
-function xorInto(a,b){for(let i=0;i<a.length;i++)a[i]^=b[i]}
+function xorScaled(dst,src,c){if(c===0)return; if(c===1){for(let i=0;i<dst.length;i++)dst[i]^=src[i];return}for(let i=0;i<dst.length;i++)dst[i]^=gfMul(c,src[i])}
+const GF_EXP=new Uint8Array(512),GF_LOG=new Uint8Array(256);(()=>{let x=1;for(let i=0;i<255;i++){GF_EXP[i]=x;GF_LOG[x]=i;x<<=1;if(x&0x100)x^=0x11d}for(let i=255;i<512;i++)GF_EXP[i]=GF_EXP[i-255]})();
+function gfMul(a,b){return(!a||!b)?0:GF_EXP[GF_LOG[a]+GF_LOG[b]]} function gfInv(a){if(!a)throw Error('gf0');return GF_EXP[255-GF_LOG[a]]}
+function fecCoeff(p,j){return gfInv((p^(32+j))&255)}
+function invMatrix(A){const n=A.length,M=A.map((r,i)=>r.slice().concat(Array.from({length:n},(_,j)=>i===j?1:0)));for(let c=0;c<n;c++){let piv=c;while(piv<n&&!M[piv][c])piv++;if(piv===n)return null;[M[c],M[piv]]=[M[piv],M[c]];const iv=gfInv(M[c][c]);for(let j=0;j<2*n;j++)M[c][j]=gfMul(M[c][j],iv);for(let r=0;r<n;r++){if(r===c)continue;const f=M[r][c];if(!f)continue;for(let j=0;j<2*n;j++)M[r][j]^=gfMul(f,M[c][j])}}return M.map(r=>r.slice(n))}
 function accountBytes(n){bytesAccepted+=n;lastNewBlockTs=performance.now();rateEvents.push([performance.now(),n]);const cutoff=performance.now()-5000;while(rateEvents.length&&rateEvents[0][0]<cutoff)rateEvents.shift()}
-function reduceEquation(eq){const remain=[];for(const i of eq.idxs){const b=blocks.get(i);if(b)xorInto(eq.data,b);else remain.push(i)}eq.idxs=remain}
-function peel(){let changed=true;while(changed){changed=false;for(const eq of equations){if(eq.done)continue;reduceEquation(eq);if(eq.idxs.length===0){eq.done=true;continue}if(eq.idxs.length===1){const i=eq.idxs[0];if(!blocks.has(i)){blocks.set(i,eq.data.slice());repairRecovered++;accountBytes(eq.data.length);changed=true}eq.done=true}}if(changed)for(const eq of equations)if(!eq.done)reduceEquation(eq)}equations=equations.filter(e=>!e.done&&e.idxs.length>1).slice(-800)}
-function reset(){sessionId=null;total=0;meta=null;blocks=new Map();equations=[];completed=false;attempts=valid=bytesAccepted=0;validTimes=[];rateEvents=[];directRecovered=repairRecovered=rescueRecovered=duplicates=0;lastNewBlockTs=0;seenKeys=new Set();seenQueue=[];startTs=performance.now();progressEl.value=0;lock=null;consecutiveFail=0;updateUI();setStatus('接收状态已重置。')}
+function tryRecoverGroup(g){if(!meta)return 0;const k=meta.fecK,r=meta.fecR,start=g*k,end=Math.min(total,start+k),actual=end-start;if(actual<=0)return 0;const missing=[];for(let j=0;j<actual;j++)if(!blocks.has(start+j))missing.push(j);if(!missing.length)return 0;if(missing.length>r)return 0;const pg=parityGroups.get(g);if(!pg||pg.size<missing.length)return 0;const rows=[...pg.keys()].slice(0,missing.length),A=rows.map(pr=>missing.map(j=>fecCoeff(pr,j))),inv=invMatrix(A);if(!inv)return 0;const rhs=[];for(const pr of rows){const v=pg.get(pr).slice();for(let j=0;j<k;j++){if(missing.includes(j))continue;let b;if(j<actual)b=blocks.get(start+j);else b=new Uint8Array(meta.blockSize);if(!b)return 0;xorScaled(v,b,fecCoeff(pr,j))}rhs.push(v)}let made=0;for(let mi=0;mi<missing.length;mi++){const out=new Uint8Array(meta.blockSize);for(let rr=0;rr<rhs.length;rr++)xorScaled(out,rhs[rr],inv[mi][rr]);const idx=start+missing[mi];if(!blocks.has(idx)){blocks.set(idx,out);fecRecovered++;made++;accountBytes(out.length)}}return made}
+function tryRecoverAll(){if(!meta)return;const groups=Math.ceil(total/meta.fecK);let changed=true,guard=0;while(changed&&guard++<3){changed=false;for(let g=0;g<groups;g++)if(tryRecoverGroup(g)>0)changed=true}}
+function reset(){sessionId=null;total=0;meta=null;blocks=new Map();parityGroups=new Map();completed=false;attempts=valid=bytesAccepted=0;validTimes=[];rateEvents=[];directRecovered=fecRecovered=duplicates=0;lastNewBlockTs=0;seenKeys=new Set();seenQueue=[];startTs=performance.now();progressEl.value=0;lock=null;consecutiveFail=0;updateUI();setStatus('接收状态已重置。');}
 function accept(p){
  if(completed)return;
  if(sessionId===null){sessionId=p.sid;total=p.count;startTs=performance.now()}
  if(p.sid!==sessionId||p.count!==total)return;
- if(p.type===FRAME_META){try{meta=parseMeta(p.payload)}catch(_){}}
+ if(p.type===FRAME_META){try{meta=parseMeta(p.payload);tryRecoverAll()}catch(_){} }
  else if(p.type===FRAME_DATA){
    if(seenOnce(p.type,p.idx))return updateUI();
-   const logical=total?(p.idx%total):0;
-   const data=whitenBytes(p.payload,(p.sid^p.idx^DATA_MASK_CONST)>>>0);
-   if(logical<total){if(!blocks.has(logical)){blocks.set(logical,data);directRecovered++;accountBytes(data.length);peel()}else duplicates++}
+   const logical=total?(p.idx%total):0,data=whitenBytes(p.payload,(p.sid^p.idx^DATA_MASK_CONST)>>>0);
+   if(logical<total){if(!blocks.has(logical)){blocks.set(logical,data);directRecovered++;accountBytes(data.length);if(meta)tryRecoverGroup(Math.floor(logical/meta.fecK))}else duplicates++}
  }
- else if(p.type===FRAME_REPAIR&&p.payload.length>=5){
-   if(seenOnce(p.type,p.idx))return updateUI();
-   const seed=u32(p.payload,0),degree=p.payload[4];
-   const data=whitenBytes(p.payload.slice(5),(p.sid^seed^REPAIR_MASK_CONST)>>>0);
-   if(meta&&data.length===meta.blockSize){
-     const eq={idxs:repairIndices(seed,degree,total),data:data.slice(),done:false};
-     reduceEquation(eq);
-     if(eq.idxs.length===1&&!blocks.has(eq.idxs[0])){blocks.set(eq.idxs[0],eq.data.slice());repairRecovered++;accountBytes(eq.data.length);peel()}
-     else if(eq.idxs.length>1)equations.push(eq)
-   }
- }
- else if(p.type===FRAME_RESCUE&&p.payload.length>=4){
-   if(seenOnce(p.type,p.idx))return updateUI();
-   const logical=u32(p.payload,0),data=whitenBytes(p.payload.slice(4),(p.sid^p.idx^RESCUE_MASK_CONST)>>>0);
-   if(logical<total){if(!blocks.has(logical)){blocks.set(logical,data);rescueRecovered++;accountBytes(data.length);peel()}else duplicates++}
+ else if(p.type===FRAME_PARITY&&p.payload.length>=5){
+   const g=u32(p.payload,0),pr=p.payload[4]; if(!meta||pr>=meta.fecR)return;
+   const key=`P:${g}:${pr}`; if(seenKeys.has(key))return updateUI(); seenKeys.add(key);seenQueue.push(key);
+   const seed=(p.sid^p.idx^Math.imul(g,0x9E3779B1)^Math.imul(pr,0x85EBCA6B)^PARITY_MASK_CONST)>>>0;
+   const data=whitenBytes(p.payload.slice(5),seed); if(data.length!==meta.blockSize)return;
+   if(!parityGroups.has(g))parityGroups.set(g,new Map()); parityGroups.get(g).set(pr,data); tryRecoverGroup(g);
  }
  updateUI();if(meta&&blocks.size===total)finish()
 }
@@ -120,17 +113,17 @@ function updateUI(){
  let eta='--';if(meta&&liveRate>1){const remain=Math.max(0,Number(meta.fileSize)-Math.min(Number(meta.fileSize),blocks.size*meta.blockSize));const sec=remain/liveRate;eta=sec<60?`${Math.ceil(sec)} s`:`${Math.floor(sec/60)}m ${Math.ceil(sec%60)}s`}
  const miss=[];if(total){for(let i=0;i<total;i++)if(!blocks.has(i))miss.push(i)}
  const stalled=blocks.size>0&&blocks.size<total&&lastNewBlockTs&&now-lastNewBlockTs>8000;
- infoEl.textContent=`session=${sessionId===null?'-':sessionId.toString(16).padStart(8,'0')} | blocks=${blocks.size}/${total||'?'}${meta?` | file=${meta.filename} | size=${meta.fileSize} B | block=${meta.blockSize} B | codec=${meta.codec}`:''}`;
- $('sBlocks').textContent=`${blocks.size}/${total||0}`;$('sEq').textContent=equations.length;$('sLiveRate').textContent=fmtRate(liveRate);$('sRate').textContent=fmtRate(rate);$('sEta').textContent=eta;$('sErr').textContent=attempts?`${((attempts-valid)/attempts*100).toFixed(1)}%`:'0%';
+ infoEl.textContent=`session=${sessionId===null?'-':sessionId.toString(16).padStart(8,'0')} | blocks=${blocks.size}/${total||'?'}${meta?` | file=${meta.filename} | size=${meta.fileSize} B | block=${meta.blockSize} B | codec=${meta.codec} | FEC=${meta.fecK}+${meta.fecR}`:''}`;
+ $('sBlocks').textContent=`${blocks.size}/${total||0}`;$('sEq').textContent=[...parityGroups.values()].reduce((a,m)=>a+m.size,0);$('sLiveRate').textContent=fmtRate(liveRate);$('sRate').textContent=fmtRate(rate);$('sEta').textContent=eta;$('sErr').textContent=attempts?`${((attempts-valid)/attempts*100).toFixed(1)}%`:'0%';
  validTimes=validTimes.filter(t=>now-t<3000);$('sFps').textContent=(validTimes.length/3).toFixed(1);$('sLock').textContent=lock&&now-lock.time<LOCK_TTL?'YES':'NO';
- $('sDirect').textContent=directRecovered;$('sRepair').textContent=repairRecovered;$('sRescue').textContent=rescueRecovered;$('sDup').textContent=duplicates;
+ $('sDirect').textContent=directRecovered;$('sFec').textContent=fecRecovered;$('sGroups').textContent=meta?`${[...Array(Math.ceil(total/meta.fecK)).keys()].filter(g=>{const st=g*meta.fecK,en=Math.min(total,st+meta.fecK);let m=0;for(let i=st;i<en;i++)if(!blocks.has(i))m++;return m>0&&m<=meta.fecR&&(parityGroups.get(g)?.size||0)>=m}).length}`:'0';$('sDup').textContent=duplicates;
  const shown=miss.slice(0,80).join(', ');$('missing').textContent=total?`Missing ${miss.length}: [${shown}${miss.length>80?', …':''}]${stalled?'  ⚠ 8s 无新块':''}`:'Missing: --';
 }
 async function finish(){if(!meta||completed)return;const size=Number(meta.fileSize);if(!Number.isSafeInteger(size))return setStatus('文件过大。','bad');const out=new Uint8Array(size);let off=0;for(let i=0;i<total;i++){const b=blocks.get(i);if(!b)return;const n=Math.min(b.length,size-off);if(n>0){out.set(b.subarray(0,n),off);off+=n}}setStatus('正在进行 SHA-256 校验…');const dg=new Uint8Array(await crypto.subtle.digest('SHA-256',out));if(hex(dg)!==hex(meta.sha))return setStatus('SHA-256 校验失败。','bad');completed=true;setStatus('完成：SHA-256 校验通过。','good');const url=URL.createObjectURL(new Blob([out],{type:'application/octet-stream'})),a=document.createElement('a');a.href=url;a.download=meta.filename||'received.bin';a.click();setTimeout(()=>URL.revokeObjectURL(url),60000)}
 async function start(){if(running)return;if(!navigator.mediaDevices?.getUserMedia)return setStatus('当前浏览器无法调用摄像头。','bad');try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:60,min:24}}});video.srcObject=stream;await video.play();running=true;lastDecode=lastDetect=0;setStatus('扫描中：请让四个角尽量保持在画面内。');loop()}catch(e){setStatus(`摄像头启动失败：${e.name} ${e.message}`,'bad')}}
 function stop(){running=false;if(raf)cancelAnimationFrame(raf);if(stream)for(const t of stream.getTracks())t.stop();stream=null;video.srcObject=null;setStatus('扫描已停止。')}
 function process(now){const vw=video.videoWidth,vh=video.videoHeight,sc=Math.min(1,PROCESS_MAX/Math.max(vw,vh)),pw=Math.round(vw*sc),ph=Math.round(vh*sc);if(work.width!==pw||work.height!==ph){work.width=pw;work.height=ph}wctx.drawImage(video,0,0,pw,ph);const img=wctx.getImageData(0,0,pw,ph),detectMs=consecutiveFail>=FAIL_REDETECT?DETECT_FAST_MS:DETECT_NORMAL_MS;if(now-lastDetect>=detectMs){lastDetect=now;const f=detect(img);if(f){const pts=smoothPoints(lock?.points,f.points);lock={points:pts,score:f.score,time:now}}else if(lock&&now-lock.time>LOCK_TTL)lock=null}if(!lock||now-lock.time>LOCK_TTL){consecutiveFail++;attempts++;updateUI();return}const n=parseInt(gridSel.value,10),m=sample(img,n,lock.points);attempts++;if(!m){consecutiveFail++;updateUI();return}for(const b of candidates(m,n)){try{const p=parsePacket(b);valid++;validTimes.push(now);consecutiveFail=0;accept(p);setStatus(`已锁定，接收 ${blocks.size}/${total||'?'}。`,'good');return}catch(_){}}consecutiveFail++;updateUI()}
-function draw(now){if(overlay.width!==video.videoWidth||overlay.height!==video.videoHeight){overlay.width=video.videoWidth;overlay.height=video.videoHeight}ctx.clearRect(0,0,overlay.width,overlay.height);const sx=overlay.width/work.width,sy=overlay.height/work.height;if(lock&&now-lock.time<LOCK_TTL){ctx.strokeStyle='rgba(72,255,120,.95)';ctx.lineWidth=Math.max(4,overlay.width/450);ctx.beginPath();lock.points.forEach((p,i)=>i?ctx.lineTo(p.x*sx,p.y*sy):ctx.moveTo(p.x*sx,p.y*sy));ctx.closePath();ctx.stroke()}else{ctx.strokeStyle='rgba(255,195,80,.9)';ctx.lineWidth=4;const s=Math.min(overlay.width,overlay.height)*.82;ctx.strokeRect((overlay.width-s)/2,(overlay.height-s)/2,s,s)}$('diag').textContent=`motion_fail=${consecutiveFail} | attempts=${attempts} | valid=${valid} | lock_age=${lock?Math.round(now-lock.time):'-'}ms | equations=${equations.length}`}
+function draw(now){if(overlay.width!==video.videoWidth||overlay.height!==video.videoHeight){overlay.width=video.videoWidth;overlay.height=video.videoHeight}ctx.clearRect(0,0,overlay.width,overlay.height);const sx=overlay.width/work.width,sy=overlay.height/work.height;if(lock&&now-lock.time<LOCK_TTL){ctx.strokeStyle='rgba(72,255,120,.95)';ctx.lineWidth=Math.max(4,overlay.width/450);ctx.beginPath();lock.points.forEach((p,i)=>i?ctx.lineTo(p.x*sx,p.y*sy):ctx.moveTo(p.x*sx,p.y*sy));ctx.closePath();ctx.stroke()}else{ctx.strokeStyle='rgba(255,195,80,.9)';ctx.lineWidth=4;const s=Math.min(overlay.width,overlay.height)*.82;ctx.strokeRect((overlay.width-s)/2,(overlay.height-s)/2,s,s)}$('diag').textContent=`motion_fail=${consecutiveFail} | attempts=${attempts} | valid=${valid} | lock_age=${lock?Math.round(now-lock.time):'-'}ms | parity=${[...parityGroups.values()].reduce((a,m)=>a+m.size,0)}`}
 function loop(now=performance.now()){if(!running)return;if(video.readyState>=2&&video.videoWidth){if(now-lastDecode>=DECODE_MS){lastDecode=now;try{process(now)}catch(e){consecutiveFail++}}draw(now)}raf=requestAnimationFrame(loop)}
 $('startBtn').onclick=start;$('stopBtn').onclick=stop;$('resetBtn').onclick=reset;gridSel.onchange=()=>{lock=null;consecutiveFail=FAIL_REDETECT};window.addEventListener('beforeunload',stop);reset();
 })();
