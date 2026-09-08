@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="color-scheme" content="dark light">
+<title>Visual File Receiver</title>
+<style>
+:root{
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:#0b0b0d;
+  color:#f5f5f7;
+}
+main{
+  max-width:900px;
+  margin:0 auto;
+  padding:14px;
+}
+h1{
+  font-size:22px;
+  margin:4px 0 14px;
+}
+.card{
+  background:#17171a;
+  border:1px solid #2a2a2e;
+  border-radius:14px;
+  padding:14px;
+  margin-bottom:12px;
+}
+.row{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+button,select{
+  border:0;
+  border-radius:10px;
+  padding:10px 14px;
+  font-size:16px;
+}
+button{
+  background:#2f6fed;
+  color:white;
+}
+button.secondary{background:#343438}
+button.danger{background:#7a2e2e}
+select{
+  background:#2a2a2d;
+  color:#fff;
+}
+label{font-size:14px;color:#c6c6c9}
+#stage{
+  position:relative;
+  width:100%;
+  overflow:hidden;
+  border-radius:12px;
+  background:#000;
+  aspect-ratio:3/4;
+}
+video,canvas{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+#overlay{pointer-events:none}
+progress{
+  width:100%;
+  height:18px;
+}
+#status{
+  margin:8px 0;
+  line-height:1.45;
+}
+.small{
+  color:#a7a7ad;
+  font-size:13px;
+  line-height:1.45;
+}
+.good{color:#6ed47d}
+.bad{color:#ff7373}
+.mono{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  word-break:break-all;
+}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <h1>Visual File Receiver</h1>
+
+  <section class="card">
+    <div class="row">
+      <label>Grid
+        <select id="grid">
+          <option value="64" selected>64 × 64</option>
+          <option value="80">80 × 80</option>
+          <option value="96">96 × 96</option>
+        </select>
+      </label>
+      <button id="startBtn">开始扫描</button>
+      <button id="stopBtn" class="secondary">停止</button>
+      <button id="resetBtn" class="danger">重置</button>
+    </div>
+
+    <div id="status">尚未启动摄像头。</div>
+    <progress id="progress" max="1" value="0"></progress>
+    <div id="info" class="small mono"></div>
+  </section>
+
+  <section class="card">
+    <div id="stage">
+      <video id="video" playsinline muted autoplay></video>
+      <canvas id="overlay"></canvas>
+    </div>
+    <div class="small" style="margin-top:10px">
+      将电脑端视觉码尽量填满绿色方框，手机尽量正对屏幕。
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="small">
+      本页不依赖任何外部库。使用 getUserMedia、Canvas、Web Crypto、Blob。
+      手机浏览器通常要求本页面处于 HTTPS 安全上下文才能访问摄像头。
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+'use strict';
+
+/* =========================
+   UI
+========================= */
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const ctx = overlay.getContext('2d', { willReadFrequently: true });
+const gridSelect = document.getElementById('grid');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const resetBtn = document.getElementById('resetBtn');
+const statusEl = document.getElementById('status');
+const infoEl = document.getElementById('info');
+const progressEl = document.getElementById('progress');
+
+let stream = null;
+let running = false;
+let rafId = 0;
+let decoding = false;
+
+/* =========================
+   VFT state
+========================= */
+let sessionId = null;
+let totalFrames = 0;
+let meta = null;
+let chunks = new Map();
+let completed = false;
+
+const HEADER_SIZE = 22;
+const BORDER = 2;
+const FINDER = 7;
+
+function setStatus(text, kind='') {
+  statusEl.textContent = text;
+  statusEl.className = kind;
+}
+
+function resetTransfer() {
+  sessionId = null;
+  totalFrames = 0;
+  meta = null;
+  chunks = new Map();
+  completed = false;
+  progressEl.value = 0;
+  infoEl.textContent = '';
+  setStatus('接收状态已重置。');
+}
+
+/* =========================
+   CRC32
+========================= */
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i=0;i<256;i++) {
+    let c = i;
+    for (let j=0;j<8;j++) {
+      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i=0;i<bytes.length;i++) {
+    crc = (CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8)) >>> 0;
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+/* =========================
+   Binary helpers
+========================= */
+function readU16(b, o) {
+  return ((b[o] << 8) | b[o+1]) >>> 0;
+}
+
+function readU32(b, o) {
+  return (
+    ((b[o] << 24) >>> 0) |
+    (b[o+1] << 16) |
+    (b[o+2] << 8) |
+    b[o+3]
+  ) >>> 0;
+}
+
+function readU64BigInt(b, o) {
+  let v = 0n;
+  for (let i=0;i<8;i++) {
+    v = (v << 8n) | BigInt(b[o+i]);
+  }
+  return v;
+}
+
+function bytesToHex(bytes) {
+  let s = '';
+  for (const x of bytes) s += x.toString(16).padStart(2,'0');
+  return s;
+}
+
+/* =========================
+   Protocol parser
+========================= */
+function parsePacket(bytes) {
+  if (!bytes || bytes.length < HEADER_SIZE) throw new Error('packet too short');
+
+  if (bytes[0] !== 0x56 || bytes[1] !== 0x46) {
+    throw new Error('bad magic');
+  }
+  if (bytes[2] !== 1) {
+    throw new Error('unsupported version');
+  }
+
+  const type = bytes[3];
+  const sid = readU32(bytes, 4);
+  const index = readU32(bytes, 8);
+  const count = readU32(bytes, 12);
+  const payloadLength = readU16(bytes, 16);
+  const expectedCRC = readU32(bytes, 18);
+
+  if (bytes.length < HEADER_SIZE + payloadLength) {
+    throw new Error('truncated packet');
+  }
+
+  const payload = bytes.slice(HEADER_SIZE, HEADER_SIZE + payloadLength);
+
+  if (crc32(payload) !== expectedCRC) {
+    throw new Error('crc mismatch');
+  }
+
+  return { type, sid, index, count, payload };
+}
+
+function parseMeta(payload) {
+  if (payload.length < 2) throw new Error('bad meta');
+
+  const filenameLength = readU16(payload, 0);
+  const nameStart = 2;
+  const nameEnd = nameStart + filenameLength;
+
+  if (payload.length < nameEnd + 8 + 4 + 32) {
+    throw new Error('bad meta length');
+  }
+
+  const filename = new TextDecoder('utf-8').decode(
+    payload.slice(nameStart, nameEnd)
+  );
+
+  const fileSize = readU64BigInt(payload, nameEnd);
+  const chunkSize = readU32(payload, nameEnd + 8);
+  const sha256 = payload.slice(nameEnd + 12, nameEnd + 44);
+
+  return {
+    filename,
+    fileSize,
+    chunkSize,
+    sha256
+  };
+}
+
+/* =========================
+   Grid geometry
+========================= */
+const coordCache = new Map();
+
+function getDataCoordinates(n) {
+  if (coordCache.has(n)) return coordCache.get(n);
+
+  const reserved = Array.from({ length:n }, () => Array(n).fill(false));
+
+  for (let r=0;r<n;r++) {
+    for (let c=0;c<n;c++) {
+      if (
+        r < BORDER || r >= n-BORDER ||
+        c < BORDER || c >= n-BORDER
+      ) reserved[r][c] = true;
+    }
+  }
+
+  const starts = [
+    [BORDER, BORDER],
+    [BORDER, n-BORDER-FINDER],
+    [n-BORDER-FINDER, BORDER],
+    [n-BORDER-FINDER, n-BORDER-FINDER]
+  ];
+
+  for (const [r,c] of starts) {
+    for (let rr=Math.max(0,r-1); rr<Math.min(n,r+FINDER+1); rr++) {
+      for (let cc=Math.max(0,c-1); cc<Math.min(n,c+FINDER+1); cc++) {
+        reserved[rr][cc] = true;
+      }
+    }
+  }
+
+  const timing = BORDER + FINDER + 1;
+  for (let i=BORDER;i<n-BORDER;i++) {
+    reserved[timing][i] = true;
+    reserved[i][timing] = true;
+  }
+
+  const calRow = n-BORDER-1;
+  const calStart = BORDER+FINDER+2;
+  for (let i=0;i<16 && calStart+i<n;i++) {
+    reserved[calRow][calStart+i] = true;
+  }
+
+  const coords = [];
+  for (let r=0;r<n;r++) {
+    for (let c=0;c<n;c++) {
+      if (!reserved[r][c]) coords.push([r,c]);
+    }
+  }
+
+  coordCache.set(n, coords);
+  return coords;
+}
+
+function bitsToUInt32(bits, offset=0) {
+  let v = 0;
+  for (let i=0;i<32;i++) {
+    v = (v * 2) + (bits[offset+i] || 0);
+  }
+  return v >>> 0;
+}
+
+function bitsToBytes(bits) {
+  const out = new Uint8Array(Math.ceil(bits.length / 8));
+  for (let i=0;i<bits.length;i++) {
+    out[i >> 3] |= bits[i] << (7 - (i & 7));
+  }
+  return out;
+}
+
+/* =========================
+   Central ROI decoder
+========================= */
+function decodeGridFromImageData(image, n) {
+  const w = image.width;
+  const h = image.height;
+
+  /*
+    The sender renders a square board in the middle of a landscape frame.
+    For browser MVP, detect using center ROI with configurable proportion.
+  */
+  const side = Math.floor(Math.min(w, h) * 0.82);
+  const x0 = Math.floor((w - side) / 2);
+  const y0 = Math.floor((h - side) / 2);
+
+  const samples = new Uint8Array(n * n);
+
+  let total = 0;
+
+  for (let r=0;r<n;r++) {
+    for (let c=0;c<n;c++) {
+      const x = Math.min(w-1, Math.floor(x0 + (c + 0.5) * side / n));
+      const y = Math.min(h-1, Math.floor(y0 + (r + 0.5) * side / n));
+
+      const o = (y*w + x) * 4;
+
+      const gray = Math.round(
+        image.data[o] * 0.299 +
+        image.data[o+1] * 0.587 +
+        image.data[o+2] * 0.114
+      );
+
+      samples[r*n+c] = gray;
+      total += gray;
+    }
+  }
+
+  /*
+    Use calibration-friendly robust threshold:
+    derive low/high quartile-ish values by min/max blending instead
+    of a pure global mean, reducing impact from UI/background.
+  */
+  let minV = 255;
+  let maxV = 0;
+  for (const v of samples) {
+    if (v < minV) minV = v;
+    if (v > maxV) maxV = v;
+  }
+
+  if (maxV - minV < 35) return null;
+
+  const threshold = (minV + maxV) / 2;
+
+  const coords = getDataCoordinates(n);
+  const bits = [];
+
+  for (const [r,c] of coords) {
+    bits.push(samples[r*n+c] < threshold ? 1 : 0);
+  }
+
+  if (bits.length < 32) return null;
+
+  const bitLength = bitsToUInt32(bits, 0);
+
+  if (
+    bitLength <= 0 ||
+    bitLength > bits.length - 32 ||
+    bitLength > 65535 * 8
+  ) return null;
+
+  const payloadBits = bits.slice(32, 32 + bitLength);
+  return bitsToBytes(payloadBits);
+}
+
+/* =========================
+   Transfer assembler
+========================= */
+function acceptPacket(packet) {
+  if (completed) return;
+
+  if (sessionId === null) {
+    sessionId = packet.sid;
+    totalFrames = packet.count;
+  }
+
+  if (packet.sid !== sessionId) {
+    return;
+  }
+
+  if (packet.count !== totalFrames) {
+    return;
+  }
+
+  if (packet.type === 1) {
+    try {
+      meta = parseMeta(packet.payload);
+    } catch (_) {}
+  } else if (packet.type === 2) {
+    if (
+      packet.index < totalFrames &&
+      !chunks.has(packet.index)
+    ) {
+      chunks.set(packet.index, packet.payload);
+    }
+  }
+
+  updateProgress();
+
+  if (meta && totalFrames > 0 && chunks.size === totalFrames) {
+    finalizeTransfer();
+  }
+}
+
+function updateProgress() {
+  progressEl.value = totalFrames ? chunks.size / totalFrames : 0;
+
+  let text = `session=${sessionId === null ? '-' : sessionId.toString(16).padStart(8,'0')}`;
+  text += ` | received=${chunks.size}/${totalFrames}`;
+
+  if (meta) {
+    text += ` | file=${meta.filename}`;
+    text += ` | size=${meta.fileSize.toString()} B`;
+    text += ` | chunk=${meta.chunkSize} B`;
+  }
+
+  infoEl.textContent = text;
+}
+
+async function finalizeTransfer() {
+  if (!meta || completed) return;
+
+  const fileSize = Number(meta.fileSize);
+
+  if (!Number.isSafeInteger(fileSize)) {
+    setStatus('文件过大，浏览器无法安全重组。','bad');
+    return;
+  }
+
+  const output = new Uint8Array(fileSize);
+
+  let offset = 0;
+
+  for (let i=0;i<totalFrames;i++) {
+    const chunk = chunks.get(i);
+    if (!chunk) return;
+
+    const length = Math.min(chunk.length, fileSize - offset);
+
+    if (length > 0) {
+      output.set(chunk.subarray(0,length), offset);
+      offset += length;
+    }
+  }
+
+  setStatus('分片接收完成，正在进行 SHA-256 校验……');
+
+  let digest;
+  try {
+    digest = new Uint8Array(
+      await crypto.subtle.digest('SHA-256', output)
+    );
+  } catch (e) {
+    setStatus('浏览器不支持 Web Crypto SHA-256：' + e.message,'bad');
+    return;
+  }
+
+  if (bytesToHex(digest) !== bytesToHex(meta.sha256)) {
+    setStatus('SHA-256 校验失败。请重置后重新接收。','bad');
+    return;
+  }
+
+  completed = true;
+  setStatus('传输完成，SHA-256 校验通过。','good');
+
+  const blob = new Blob([output], {
+    type:'application/octet-stream'
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = meta.filename || 'received.bin';
+  a.style.display = 'none';
+
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+/* =========================
+   Camera loop
+========================= */
+async function startCamera() {
+  if (running) return;
+
+  if (!window.isSecureContext) {
+    setStatus(
+      '当前页面不是安全上下文。手机摄像头通常要求 HTTPS；直接 file:// 或普通 HTTP 可能无法使用。',
+      'bad'
+    );
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setStatus(
+      '当前浏览器无法使用 getUserMedia。请使用支持摄像头网页 API 的浏览器，并通过 HTTPS 打开。',
+      'bad'
+    );
+    return;
+  }
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio:false,
+      video:{
+        facingMode:{ ideal:'environment' },
+        width:{ ideal:1920 },
+        height:{ ideal:1080 }
+      }
+    });
+
+    video.srcObject = stream;
+    await video.play();
+
+    running = true;
+    setStatus('扫描中。请将视觉码填满绿色框。');
+
+    renderLoop();
+  } catch (e) {
+    setStatus(
+      `摄像头启动失败：${e.name || ''} ${e.message || e}`,
+      'bad'
+    );
+  }
+}
+
+function stopCamera() {
+  running = false;
+
+  if (rafId) {
+    cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+
+  if (stream) {
+    for (const track of stream.getTracks()) track.stop();
+    stream = null;
+  }
+
+  video.srcObject = null;
+  setStatus('扫描已停止。');
+}
+
+function renderLoop() {
+  if (!running) return;
+
+  if (
+    video.readyState >= 2 &&
+    video.videoWidth > 0 &&
+    video.videoHeight > 0
+  ) {
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+
+    if (overlay.width !== w || overlay.height !== h) {
+      overlay.width = w;
+      overlay.height = h;
+    }
+
+    ctx.drawImage(video, 0, 0, w, h);
+
+    if (!decoding) {
+      decoding = true;
+
+      try {
+        const image = ctx.getImageData(0,0,w,h);
+        const n = parseInt(gridSelect.value,10);
+
+        const packetBytes = decodeGridFromImageData(image,n);
+
+        if (packetBytes) {
+          try {
+            const packet = parsePacket(packetBytes);
+            acceptPacket(packet);
+          } catch (_) {
+            // Expected for frames sampled during transitions.
+          }
+        }
+      } catch (_) {
+      } finally {
+        decoding = false;
+      }
+    }
+
+    /*
+      Redraw guide after sampling.
+    */
+    ctx.drawImage(video,0,0,w,h);
+
+    const side = Math.min(w,h)*0.82;
+    const x = (w-side)/2;
+    const y = (h-side)/2;
+
+    ctx.lineWidth = Math.max(3,w/450);
+    ctx.strokeStyle = 'rgba(50,255,100,.9)';
+    ctx.strokeRect(x,y,side,side);
+  }
+
+  rafId = requestAnimationFrame(renderLoop);
+}
+
+/* =========================
+   UI events
+========================= */
+startBtn.addEventListener('click', startCamera);
+stopBtn.addEventListener('click', stopCamera);
+resetBtn.addEventListener('click', () => {
+  resetTransfer();
+});
+
+window.addEventListener('beforeunload', () => {
+  stopCamera();
+});
+
+resetTransfer();
+
+})();
+</script>
+</body>
+</html>
