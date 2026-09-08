@@ -4,702 +4,120 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="color-scheme" content="dark light">
-<title>Visual File Receiver</title>
+<title>Visual File Receiver · Robust</title>
 <style>
-:root{
-  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  color-scheme:dark;
-}
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark}
 *{box-sizing:border-box}
-body{
-  margin:0;
-  background:#0b0b0d;
-  color:#f5f5f7;
-}
-main{
-  max-width:900px;
-  margin:0 auto;
-  padding:14px;
-}
-h1{
-  font-size:22px;
-  margin:4px 0 14px;
-}
-.card{
-  background:#17171a;
-  border:1px solid #2a2a2e;
-  border-radius:14px;
-  padding:14px;
-  margin-bottom:12px;
-}
-.row{
-  display:flex;
-  gap:8px;
-  align-items:center;
-  flex-wrap:wrap;
-}
-button,select{
-  border:0;
-  border-radius:10px;
-  padding:10px 14px;
-  font-size:16px;
-}
-button{
-  background:#2f6fed;
-  color:white;
-}
-button.secondary{background:#343438}
-button.danger{background:#7a2e2e}
-select{
-  background:#2a2a2d;
-  color:#fff;
-}
-label{font-size:14px;color:#c6c6c9}
-#stage{
-  position:relative;
-  width:100%;
-  overflow:hidden;
-  border-radius:12px;
-  background:#000;
-  aspect-ratio:3/4;
-}
-video,canvas{
-  position:absolute;
-  inset:0;
-  width:100%;
-  height:100%;
-  object-fit:cover;
-}
-#overlay{pointer-events:none}
-progress{
-  width:100%;
-  height:18px;
-}
-#status{
-  margin:8px 0;
-  line-height:1.45;
-}
-.small{
-  color:#a7a7ad;
-  font-size:13px;
-  line-height:1.45;
-}
-.good{color:#6ed47d}
-.bad{color:#ff7373}
-.mono{
-  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  word-break:break-all;
-}
-.hidden{display:none!important}
+body{margin:0;background:#0b0b0d;color:#f5f5f7}
+main{max-width:900px;margin:0 auto;padding:14px}
+h1{font-size:22px;margin:4px 0 14px}
+.card{background:#17171a;border:1px solid #2a2a2e;border-radius:14px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button,select{border:0;border-radius:10px;padding:10px 14px;font-size:16px}
+button{background:#2f6fed;color:#fff}.secondary{background:#343438}.danger{background:#7a2e2e}
+select{background:#2a2a2d;color:#fff}label{font-size:14px;color:#c6c6c9}
+#stage{position:relative;width:100%;overflow:hidden;border-radius:12px;background:#000;aspect-ratio:3/4}
+video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}#overlay{pointer-events:none}
+progress{width:100%;height:18px}#status{margin:8px 0;line-height:1.45}
+.small{color:#a7a7ad;font-size:13px;line-height:1.45}.good{color:#6ed47d}.bad{color:#ff7373}.warn{color:#ffd166}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
+.badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#2a2a2d;font-size:12px;margin-left:6px}
 </style>
 </head>
 <body>
 <main>
-  <h1>Visual File Receiver</h1>
-
-  <section class="card">
-    <div class="row">
-      <label>Grid
-        <select id="grid">
-          <option value="64" selected>64 × 64</option>
-          <option value="80">80 × 80</option>
-          <option value="96">96 × 96</option>
-        </select>
-      </label>
-      <button id="startBtn">开始扫描</button>
-      <button id="stopBtn" class="secondary">停止</button>
-      <button id="resetBtn" class="danger">重置</button>
-    </div>
-
-    <div id="status">尚未启动摄像头。</div>
-    <progress id="progress" max="1" value="0"></progress>
-    <div id="info" class="small mono"></div>
-  </section>
-
-  <section class="card">
-    <div id="stage">
-      <video id="video" playsinline muted autoplay></video>
-      <canvas id="overlay"></canvas>
-    </div>
-    <div class="small" style="margin-top:10px">
-      将电脑端视觉码尽量填满绿色方框，手机尽量正对屏幕。
-    </div>
-  </section>
-
-  <section class="card">
-    <div class="small">
-      本页不依赖任何外部库。使用 getUserMedia、Canvas、Web Crypto、Blob。
-      手机浏览器通常要求本页面处于 HTTPS 安全上下文才能访问摄像头。
-    </div>
-  </section>
+<h1>Visual File Receiver <span class="badge">Robust v2</span></h1>
+<section class="card">
+  <div class="row">
+    <label>Grid <select id="grid"><option value="64" selected>64 × 64</option><option value="80">80 × 80</option><option value="96">96 × 96</option></select></label>
+    <label>定位 <select id="mode"><option value="auto" selected>自动四角</option><option value="fallback">中心框兼容</option></select></label>
+    <button id="startBtn">开始扫描</button><button id="stopBtn" class="secondary">停止</button><button id="resetBtn" class="danger">重置</button>
+  </div>
+  <div id="status">尚未启动摄像头。</div>
+  <progress id="progress" max="1" value="0"></progress>
+  <div id="info" class="small mono"></div>
+  <div id="diag" class="small mono"></div>
+</section>
+<section class="card">
+  <div id="stage"><video id="video" playsinline muted autoplay></video><canvas id="overlay"></canvas></div>
+  <div class="small" style="margin-top:10px">自动模式会检测四个 7×7 定位标记并做透视矫正。绿色四边形表示已锁定；未锁定时可将视觉码大致置于黄色框内。</div>
+</section>
+<section class="card"><div class="small">纯 HTML + 内嵌 JavaScript，无 CDN、无 OpenCV.js、无上传逻辑。文件数据只在本机浏览器内重组，并使用 SHA-256 校验。</div></section>
 </main>
-
 <script>
 (() => {
 'use strict';
-
-/* =========================
-   UI
-========================= */
-const video = document.getElementById('video');
-const overlay = document.getElementById('overlay');
-const ctx = overlay.getContext('2d', { willReadFrequently: true });
-const gridSelect = document.getElementById('grid');
-const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
-const resetBtn = document.getElementById('resetBtn');
-const statusEl = document.getElementById('status');
-const infoEl = document.getElementById('info');
-const progressEl = document.getElementById('progress');
-
-let stream = null;
-let running = false;
-let rafId = 0;
-let decoding = false;
-
-/* =========================
-   VFT state
-========================= */
-let sessionId = null;
-let totalFrames = 0;
-let meta = null;
-let chunks = new Map();
-let completed = false;
-
-const HEADER_SIZE = 22;
-const BORDER = 2;
-const FINDER = 7;
-
-function setStatus(text, kind='') {
-  statusEl.textContent = text;
-  statusEl.className = kind;
+const video=document.getElementById('video'), overlay=document.getElementById('overlay');
+const ctx=overlay.getContext('2d');
+const gridSelect=document.getElementById('grid'), modeSelect=document.getElementById('mode');
+const startBtn=document.getElementById('startBtn'), stopBtn=document.getElementById('stopBtn'), resetBtn=document.getElementById('resetBtn');
+const statusEl=document.getElementById('status'), infoEl=document.getElementById('info'), diagEl=document.getElementById('diag'), progressEl=document.getElementById('progress');
+const work=document.createElement('canvas'), wctx=work.getContext('2d',{willReadFrequently:true});
+let stream=null,running=false,rafId=0,lastDecodeAt=0,lastDetectAt=0,lock=null;
+let goodFrames=0,badFrames=0,detectAttempts=0;
+let sessionId=null,totalFrames=0,meta=null,chunks=new Map(),completed=false;
+const HEADER_SIZE=22,BORDER=2,FINDER=7,PROCESS_MAX=800,DECODE_MS=70,DETECT_MS=180,LOCK_TTL=850;
+const FINDERS=[
+[[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],[1,0,1,0,1,0,1],[1,0,1,1,1,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]],
+[[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],[1,0,1,1,0,0,1],[1,0,1,0,1,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]],
+[[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,0,1,0,1],[1,0,0,1,1,0,1],[1,0,1,1,1,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]],
+[[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],[1,0,1,0,0,0,1],[1,0,1,1,0,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]]
+];
+function setStatus(t,k=''){statusEl.textContent=t;statusEl.className=k}
+function resetTransfer(){sessionId=null;totalFrames=0;meta=null;chunks=new Map();completed=false;progressEl.value=0;infoEl.textContent='';goodFrames=badFrames=0;setStatus('接收状态已重置。')}
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[i]=c>>>0}return t})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=(CRC_TABLE[(c^b[i])&255]^(c>>>8))>>>0;return(c^0xFFFFFFFF)>>>0}
+const readU16=(b,o)=>((b[o]<<8)|b[o+1])>>>0;
+function readU32(b,o){return(((b[o]<<24)>>>0)|(b[o+1]<<16)|(b[o+2]<<8)|b[o+3])>>>0}
+function readU64BigInt(b,o){let v=0n;for(let i=0;i<8;i++)v=(v<<8n)|BigInt(b[o+i]);return v}
+function bytesToHex(b){let s='';for(const x of b)s+=x.toString(16).padStart(2,'0');return s}
+function parsePacket(bytes){
+ if(!bytes||bytes.length<HEADER_SIZE)throw Error('short');
+ if(bytes[0]!==0x56||bytes[1]!==0x46||bytes[2]!==1)throw Error('magic');
+ const type=bytes[3],sid=readU32(bytes,4),index=readU32(bytes,8),count=readU32(bytes,12),len=readU16(bytes,16),want=readU32(bytes,18);
+ if(type!==1&&type!==2)throw Error('type'); if(count>10000000)throw Error('count'); if(bytes.length<HEADER_SIZE+len)throw Error('truncated');
+ const payload=bytes.slice(HEADER_SIZE,HEADER_SIZE+len);if(crc32(payload)!==want)throw Error('crc');return{type,sid,index,count,payload};
 }
-
-function resetTransfer() {
-  sessionId = null;
-  totalFrames = 0;
-  meta = null;
-  chunks = new Map();
-  completed = false;
-  progressEl.value = 0;
-  infoEl.textContent = '';
-  setStatus('接收状态已重置。');
+function parseMeta(p){if(p.length<2)throw Error('meta');const nl=readU16(p,0),e=2+nl;if(p.length<e+44)throw Error('meta len');return{filename:new TextDecoder('utf-8').decode(p.slice(2,e)),fileSize:readU64BigInt(p,e),chunkSize:readU32(p,e+8),sha256:p.slice(e+12,e+44)}}
+const coordCache=new Map();
+function getDataCoordinates(n){if(coordCache.has(n))return coordCache.get(n);const r=Array.from({length:n},()=>new Uint8Array(n));for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(y<BORDER||y>=n-BORDER||x<BORDER||x>=n-BORDER)r[y][x]=1;const s=[[BORDER,BORDER],[BORDER,n-BORDER-FINDER],[n-BORDER-FINDER,BORDER],[n-BORDER-FINDER,n-BORDER-FINDER]];for(const [y,x] of s)for(let yy=Math.max(0,y-1);yy<Math.min(n,y+FINDER+1);yy++)for(let xx=Math.max(0,x-1);xx<Math.min(n,x+FINDER+1);xx++)r[yy][xx]=1;const t=BORDER+FINDER+1;for(let i=BORDER;i<n-BORDER;i++){r[t][i]=1;r[i][t]=1}const cr=n-BORDER-1,cs=BORDER+FINDER+2;for(let i=0;i<16&&cs+i<n;i++)r[cr][cs+i]=1;const out=[];for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(!r[y][x])out.push([y,x]);coordCache.set(n,out);return out}
+function bitsToUInt32(bits,o=0){let v=0;for(let i=0;i<32;i++)v=v*2+(bits[o+i]||0);return v>>>0}
+function bitsToBytes(bits){const o=new Uint8Array(Math.ceil(bits.length/8));for(let i=0;i<bits.length;i++)o[i>>3]|=bits[i]<<(7-(i&7));return o}
+function matrixToPacketBytes(m,n){const coords=getDataCoordinates(n),bits=new Uint8Array(coords.length);for(let i=0;i<coords.length;i++){const [r,c]=coords[i];bits[i]=m[r*n+c]}if(bits.length<32)return null;const len=bitsToUInt32(bits,0);if(len<=0||len>bits.length-32||len>524280)return null;return bitsToBytes(bits.slice(32,32+len))}
+function transformMatrix(src,n,rot,mirror){const out=new Uint8Array(n*n);for(let r=0;r<n;r++)for(let c=0;c<n;c++){let rr=r,cc=c;if(mirror)cc=n-1-cc;for(let k=0;k<rot;k++){const nr=cc,nc=n-1-rr;rr=nr;cc=nc}out[rr*n+cc]=src[r*n+c]}return out}
+function allPacketCandidates(m,n){const out=[];for(let mir=0;mir<2;mir++)for(let rot=0;rot<4;rot++){const b=matrixToPacketBytes(transformMatrix(m,n,rot,mir),n);if(b)out.push(b)}return out}
+function grayAt(data,w,x,y){x=Math.max(0,Math.min(w-1,x|0));y=Math.max(0,Math.min((data.length/4/w)-1,y|0));const o=(y*w+x)*4;return Math.round(data[o]*.299+data[o+1]*.587+data[o+2]*.114)}
+function otsu(values,max=256){const hist=new Uint32Array(max);for(const v of values)hist[Math.max(0,Math.min(max-1,v|0))]++;let total=values.length,sum=0;for(let i=0;i<max;i++)sum+=i*hist[i];let wb=0,sb=0,best=-1,th=127;for(let t=0;t<max;t++){wb+=hist[t];if(!wb)continue;const wf=total-wb;if(!wf)break;sb+=t*hist[t];const mb=sb/wb,mf=(sum-sb)/wf,v=wb*wf*(mb-mf)*(mb-mf);if(v>best){best=v;th=t}}return th}
+function templateScore(bin,w,h,x0,y0,x1,y1){let best=0;for(const temp of FINDERS){let hit=0,tot=0;for(let r=0;r<7;r++)for(let c=0;c<7;c++){const x=Math.round(x0+(c+.5)*(x1-x0+1)/7),y=Math.round(y0+(r+.5)*(y1-y0+1)/7);if(x>=0&&x<w&&y>=0&&y<h){if(bin[y*w+x]===temp[r][c])hit++;tot++}}best=Math.max(best,hit/Math.max(1,tot))}return best}
+function detectFinders(img){
+ const w=img.width,h=img.height,N=w*h,gray=new Uint8Array(N),hist=new Uint32Array(256);for(let i=0,o=0;i<N;i++,o+=4){const g=Math.round(img.data[o]*.299+img.data[o+1]*.587+img.data[o+2]*.114);gray[i]=g;hist[g]++}
+ let total=N,sum=0;for(let i=0;i<256;i++)sum+=i*hist[i];let wb=0,sb=0,best=-1,thr=128;for(let t=0;t<256;t++){wb+=hist[t];if(!wb)continue;const wf=total-wb;if(!wf)break;sb+=t*hist[t];const mb=sb/wb,mf=(sum-sb)/wf,v=wb*wf*(mb-mf)*(mb-mf);if(v>best){best=v;thr=t}}
+ thr=Math.max(45,Math.min(210,thr));const bin=new Uint8Array(N);for(let i=0;i<N;i++)bin[i]=gray[i]<thr?1:0;
+ const seen=new Uint8Array(N),stack=new Int32Array(N),cand=[];const minSide=Math.max(9,Math.floor(Math.min(w,h)*.018)),maxSide=Math.floor(Math.min(w,h)*.22);
+ for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const start=y*w+x;if(!bin[start]||seen[start])continue;let sp=0,area=0,minx=x,maxx=x,miny=y,maxy=y;stack[sp++]=start;seen[start]=1;while(sp){const p=stack[--sp],py=(p/w)|0,px=p-py*w;area++;if(px<minx)minx=px;if(px>maxx)maxx=px;if(py<miny)miny=py;if(py>maxy)maxy=py;const ns=[p-1,p+1,p-w,p+w];for(let k=0;k<4;k++){const q=ns[k];if(q>=0&&q<N&&!seen[q]&&bin[q]){seen[q]=1;stack[sp++]=q}}}
+  const bw=maxx-minx+1,bh=maxy-miny+1;if(bw<minSide||bh<minSide||bw>maxSide||bh>maxSide)continue;const ar=bw/bh,fill=area/(bw*bh);if(ar<.62||ar>1.62||fill<.22||fill>.72)continue;const sc=templateScore(bin,w,h,minx,miny,maxx,maxy);if(sc<.72)continue;cand.push({x:(minx+maxx)/2,y:(miny+maxy)/2,w:bw,h:bh,score:sc,area});
+ }
+ cand.sort((a,b)=>(b.score*2+Math.log1p(b.area))-(a.score*2+Math.log1p(a.area)));const unique=[];for(const c of cand){if(unique.every(u=>Math.hypot(u.x-c.x,u.y-c.y)>Math.min(u.w,c.w)*.7))unique.push(c);if(unique.length>=10)break}if(unique.length<4)return null;
+ let bestSet=null,bestScore=-1;const q=unique.slice(0,8);for(let a=0;a<q.length-3;a++)for(let b=a+1;b<q.length-2;b++)for(let c=b+1;c<q.length-1;c++)for(let d=c+1;d<q.length;d++){const set=[q[a],q[b],q[c],q[d]],sizes=set.map(z=>(z.w+z.h)/2),smin=Math.min(...sizes),smax=Math.max(...sizes);if(smax/smin>1.9)continue;const ord=orderQuad(set),areaQ=Math.abs(polyArea(ord));if(areaQ<w*h*.035)continue;const sides=[];for(let i=0;i<4;i++)sides.push(Math.hypot(ord[(i+1)%4].x-ord[i].x,ord[(i+1)%4].y-ord[i].y));const mn=Math.min(...sides),mx=Math.max(...sides);if(mn<Math.min(w,h)*.18||mx/mn>2.5)continue;const score=set.reduce((s,z)=>s+z.score,0)+Math.min(3,areaQ/(w*h)*8)-(smax/smin-1);if(score>bestScore){bestScore=score;bestSet=ord}}
+ return bestSet?{points:bestSet,score:bestScore,threshold:thr}:null;
 }
-
-/* =========================
-   CRC32
-========================= */
-const CRC_TABLE = (() => {
-  const table = new Uint32Array(256);
-  for (let i=0;i<256;i++) {
-    let c = i;
-    for (let j=0;j<8;j++) {
-      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    }
-    table[i] = c >>> 0;
-  }
-  return table;
-})();
-
-function crc32(bytes) {
-  let crc = 0xFFFFFFFF;
-  for (let i=0;i<bytes.length;i++) {
-    crc = (CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8)) >>> 0;
-  }
-  return (crc ^ 0xFFFFFFFF) >>> 0;
-}
-
-/* =========================
-   Binary helpers
-========================= */
-function readU16(b, o) {
-  return ((b[o] << 8) | b[o+1]) >>> 0;
-}
-
-function readU32(b, o) {
-  return (
-    ((b[o] << 24) >>> 0) |
-    (b[o+1] << 16) |
-    (b[o+2] << 8) |
-    b[o+3]
-  ) >>> 0;
-}
-
-function readU64BigInt(b, o) {
-  let v = 0n;
-  for (let i=0;i<8;i++) {
-    v = (v << 8n) | BigInt(b[o+i]);
-  }
-  return v;
-}
-
-function bytesToHex(bytes) {
-  let s = '';
-  for (const x of bytes) s += x.toString(16).padStart(2,'0');
-  return s;
-}
-
-/* =========================
-   Protocol parser
-========================= */
-function parsePacket(bytes) {
-  if (!bytes || bytes.length < HEADER_SIZE) throw new Error('packet too short');
-
-  if (bytes[0] !== 0x56 || bytes[1] !== 0x46) {
-    throw new Error('bad magic');
-  }
-  if (bytes[2] !== 1) {
-    throw new Error('unsupported version');
-  }
-
-  const type = bytes[3];
-  const sid = readU32(bytes, 4);
-  const index = readU32(bytes, 8);
-  const count = readU32(bytes, 12);
-  const payloadLength = readU16(bytes, 16);
-  const expectedCRC = readU32(bytes, 18);
-
-  if (bytes.length < HEADER_SIZE + payloadLength) {
-    throw new Error('truncated packet');
-  }
-
-  const payload = bytes.slice(HEADER_SIZE, HEADER_SIZE + payloadLength);
-
-  if (crc32(payload) !== expectedCRC) {
-    throw new Error('crc mismatch');
-  }
-
-  return { type, sid, index, count, payload };
-}
-
-function parseMeta(payload) {
-  if (payload.length < 2) throw new Error('bad meta');
-
-  const filenameLength = readU16(payload, 0);
-  const nameStart = 2;
-  const nameEnd = nameStart + filenameLength;
-
-  if (payload.length < nameEnd + 8 + 4 + 32) {
-    throw new Error('bad meta length');
-  }
-
-  const filename = new TextDecoder('utf-8').decode(
-    payload.slice(nameStart, nameEnd)
-  );
-
-  const fileSize = readU64BigInt(payload, nameEnd);
-  const chunkSize = readU32(payload, nameEnd + 8);
-  const sha256 = payload.slice(nameEnd + 12, nameEnd + 44);
-
-  return {
-    filename,
-    fileSize,
-    chunkSize,
-    sha256
-  };
-}
-
-/* =========================
-   Grid geometry
-========================= */
-const coordCache = new Map();
-
-function getDataCoordinates(n) {
-  if (coordCache.has(n)) return coordCache.get(n);
-
-  const reserved = Array.from({ length:n }, () => Array(n).fill(false));
-
-  for (let r=0;r<n;r++) {
-    for (let c=0;c<n;c++) {
-      if (
-        r < BORDER || r >= n-BORDER ||
-        c < BORDER || c >= n-BORDER
-      ) reserved[r][c] = true;
-    }
-  }
-
-  const starts = [
-    [BORDER, BORDER],
-    [BORDER, n-BORDER-FINDER],
-    [n-BORDER-FINDER, BORDER],
-    [n-BORDER-FINDER, n-BORDER-FINDER]
-  ];
-
-  for (const [r,c] of starts) {
-    for (let rr=Math.max(0,r-1); rr<Math.min(n,r+FINDER+1); rr++) {
-      for (let cc=Math.max(0,c-1); cc<Math.min(n,c+FINDER+1); cc++) {
-        reserved[rr][cc] = true;
-      }
-    }
-  }
-
-  const timing = BORDER + FINDER + 1;
-  for (let i=BORDER;i<n-BORDER;i++) {
-    reserved[timing][i] = true;
-    reserved[i][timing] = true;
-  }
-
-  const calRow = n-BORDER-1;
-  const calStart = BORDER+FINDER+2;
-  for (let i=0;i<16 && calStart+i<n;i++) {
-    reserved[calRow][calStart+i] = true;
-  }
-
-  const coords = [];
-  for (let r=0;r<n;r++) {
-    for (let c=0;c<n;c++) {
-      if (!reserved[r][c]) coords.push([r,c]);
-    }
-  }
-
-  coordCache.set(n, coords);
-  return coords;
-}
-
-function bitsToUInt32(bits, offset=0) {
-  let v = 0;
-  for (let i=0;i<32;i++) {
-    v = (v * 2) + (bits[offset+i] || 0);
-  }
-  return v >>> 0;
-}
-
-function bitsToBytes(bits) {
-  const out = new Uint8Array(Math.ceil(bits.length / 8));
-  for (let i=0;i<bits.length;i++) {
-    out[i >> 3] |= bits[i] << (7 - (i & 7));
-  }
-  return out;
-}
-
-/* =========================
-   Central ROI decoder
-========================= */
-function decodeGridFromImageData(image, n) {
-  const w = image.width;
-  const h = image.height;
-
-  /*
-    The sender renders a square board in the middle of a landscape frame.
-    For browser MVP, detect using center ROI with configurable proportion.
-  */
-  const side = Math.floor(Math.min(w, h) * 0.82);
-  const x0 = Math.floor((w - side) / 2);
-  const y0 = Math.floor((h - side) / 2);
-
-  const samples = new Uint8Array(n * n);
-
-  let total = 0;
-
-  for (let r=0;r<n;r++) {
-    for (let c=0;c<n;c++) {
-      const x = Math.min(w-1, Math.floor(x0 + (c + 0.5) * side / n));
-      const y = Math.min(h-1, Math.floor(y0 + (r + 0.5) * side / n));
-
-      const o = (y*w + x) * 4;
-
-      const gray = Math.round(
-        image.data[o] * 0.299 +
-        image.data[o+1] * 0.587 +
-        image.data[o+2] * 0.114
-      );
-
-      samples[r*n+c] = gray;
-      total += gray;
-    }
-  }
-
-  /*
-    Use calibration-friendly robust threshold:
-    derive low/high quartile-ish values by min/max blending instead
-    of a pure global mean, reducing impact from UI/background.
-  */
-  let minV = 255;
-  let maxV = 0;
-  for (const v of samples) {
-    if (v < minV) minV = v;
-    if (v > maxV) maxV = v;
-  }
-
-  if (maxV - minV < 35) return null;
-
-  const threshold = (minV + maxV) / 2;
-
-  const coords = getDataCoordinates(n);
-  const bits = [];
-
-  for (const [r,c] of coords) {
-    bits.push(samples[r*n+c] < threshold ? 1 : 0);
-  }
-
-  if (bits.length < 32) return null;
-
-  const bitLength = bitsToUInt32(bits, 0);
-
-  if (
-    bitLength <= 0 ||
-    bitLength > bits.length - 32 ||
-    bitLength > 65535 * 8
-  ) return null;
-
-  const payloadBits = bits.slice(32, 32 + bitLength);
-  return bitsToBytes(payloadBits);
-}
-
-/* =========================
-   Transfer assembler
-========================= */
-function acceptPacket(packet) {
-  if (completed) return;
-
-  if (sessionId === null) {
-    sessionId = packet.sid;
-    totalFrames = packet.count;
-  }
-
-  if (packet.sid !== sessionId) {
-    return;
-  }
-
-  if (packet.count !== totalFrames) {
-    return;
-  }
-
-  if (packet.type === 1) {
-    try {
-      meta = parseMeta(packet.payload);
-    } catch (_) {}
-  } else if (packet.type === 2) {
-    if (
-      packet.index < totalFrames &&
-      !chunks.has(packet.index)
-    ) {
-      chunks.set(packet.index, packet.payload);
-    }
-  }
-
-  updateProgress();
-
-  if (meta && totalFrames > 0 && chunks.size === totalFrames) {
-    finalizeTransfer();
-  }
-}
-
-function updateProgress() {
-  progressEl.value = totalFrames ? chunks.size / totalFrames : 0;
-
-  let text = `session=${sessionId === null ? '-' : sessionId.toString(16).padStart(8,'0')}`;
-  text += ` | received=${chunks.size}/${totalFrames}`;
-
-  if (meta) {
-    text += ` | file=${meta.filename}`;
-    text += ` | size=${meta.fileSize.toString()} B`;
-    text += ` | chunk=${meta.chunkSize} B`;
-  }
-
-  infoEl.textContent = text;
-}
-
-async function finalizeTransfer() {
-  if (!meta || completed) return;
-
-  const fileSize = Number(meta.fileSize);
-
-  if (!Number.isSafeInteger(fileSize)) {
-    setStatus('文件过大，浏览器无法安全重组。','bad');
-    return;
-  }
-
-  const output = new Uint8Array(fileSize);
-
-  let offset = 0;
-
-  for (let i=0;i<totalFrames;i++) {
-    const chunk = chunks.get(i);
-    if (!chunk) return;
-
-    const length = Math.min(chunk.length, fileSize - offset);
-
-    if (length > 0) {
-      output.set(chunk.subarray(0,length), offset);
-      offset += length;
-    }
-  }
-
-  setStatus('分片接收完成，正在进行 SHA-256 校验……');
-
-  let digest;
-  try {
-    digest = new Uint8Array(
-      await crypto.subtle.digest('SHA-256', output)
-    );
-  } catch (e) {
-    setStatus('浏览器不支持 Web Crypto SHA-256：' + e.message,'bad');
-    return;
-  }
-
-  if (bytesToHex(digest) !== bytesToHex(meta.sha256)) {
-    setStatus('SHA-256 校验失败。请重置后重新接收。','bad');
-    return;
-  }
-
-  completed = true;
-  setStatus('传输完成，SHA-256 校验通过。','good');
-
-  const blob = new Blob([output], {
-    type:'application/octet-stream'
-  });
-
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = meta.filename || 'received.bin';
-  a.style.display = 'none';
-
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-}
-
-/* =========================
-   Camera loop
-========================= */
-async function startCamera() {
-  if (running) return;
-
-  if (!window.isSecureContext) {
-    setStatus(
-      '当前页面不是安全上下文。手机摄像头通常要求 HTTPS；直接 file:// 或普通 HTTP 可能无法使用。',
-      'bad'
-    );
-  }
-
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    setStatus(
-      '当前浏览器无法使用 getUserMedia。请使用支持摄像头网页 API 的浏览器，并通过 HTTPS 打开。',
-      'bad'
-    );
-    return;
-  }
-
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio:false,
-      video:{
-        facingMode:{ ideal:'environment' },
-        width:{ ideal:1920 },
-        height:{ ideal:1080 }
-      }
-    });
-
-    video.srcObject = stream;
-    await video.play();
-
-    running = true;
-    setStatus('扫描中。请将视觉码填满绿色框。');
-
-    renderLoop();
-  } catch (e) {
-    setStatus(
-      `摄像头启动失败：${e.name || ''} ${e.message || e}`,
-      'bad'
-    );
-  }
-}
-
-function stopCamera() {
-  running = false;
-
-  if (rafId) {
-    cancelAnimationFrame(rafId);
-    rafId = 0;
-  }
-
-  if (stream) {
-    for (const track of stream.getTracks()) track.stop();
-    stream = null;
-  }
-
-  video.srcObject = null;
-  setStatus('扫描已停止。');
-}
-
-function renderLoop() {
-  if (!running) return;
-
-  if (
-    video.readyState >= 2 &&
-    video.videoWidth > 0 &&
-    video.videoHeight > 0
-  ) {
-    const w = video.videoWidth;
-    const h = video.videoHeight;
-
-    if (overlay.width !== w || overlay.height !== h) {
-      overlay.width = w;
-      overlay.height = h;
-    }
-
-    ctx.drawImage(video, 0, 0, w, h);
-
-    if (!decoding) {
-      decoding = true;
-
-      try {
-        const image = ctx.getImageData(0,0,w,h);
-        const n = parseInt(gridSelect.value,10);
-
-        const packetBytes = decodeGridFromImageData(image,n);
-
-        if (packetBytes) {
-          try {
-            const packet = parsePacket(packetBytes);
-            acceptPacket(packet);
-          } catch (_) {
-            // Expected for frames sampled during transitions.
-          }
-        }
-      } catch (_) {
-      } finally {
-        decoding = false;
-      }
-    }
-
-    /*
-      Redraw guide after sampling.
-    */
-    ctx.drawImage(video,0,0,w,h);
-
-    const side = Math.min(w,h)*0.82;
-    const x = (w-side)/2;
-    const y = (h-side)/2;
-
-    ctx.lineWidth = Math.max(3,w/450);
-    ctx.strokeStyle = 'rgba(50,255,100,.9)';
-    ctx.strokeRect(x,y,side,side);
-  }
-
-  rafId = requestAnimationFrame(renderLoop);
-}
-
-/* =========================
-   UI events
-========================= */
-startBtn.addEventListener('click', startCamera);
-stopBtn.addEventListener('click', stopCamera);
-resetBtn.addEventListener('click', () => {
-  resetTransfer();
-});
-
-window.addEventListener('beforeunload', () => {
-  stopCamera();
-});
-
-resetTransfer();
-
+function polyArea(p){let a=0;for(let i=0;i<p.length;i++){const j=(i+1)%p.length;a+=p[i].x*p[j].y-p[j].x*p[i].y}return a/2}
+function orderQuad(points){const cx=points.reduce((s,p)=>s+p.x,0)/4,cy=points.reduce((s,p)=>s+p.y,0)/4;let q=points.slice().sort((a,b)=>Math.atan2(a.y-cy,a.x-cx)-Math.atan2(b.y-cy,b.x-cx));if(polyArea(q)<0)q.reverse();let idx=0,best=Infinity;for(let i=0;i<4;i++){const v=q[i].x+q[i].y;if(v<best){best=v;idx=i}}return q.slice(idx).concat(q.slice(0,idx))}
+function solveLinear(A,b){const n=b.length;for(let i=0;i<n;i++){let m=i;for(let r=i+1;r<n;r++)if(Math.abs(A[r][i])>Math.abs(A[m][i]))m=r;if(Math.abs(A[m][i])<1e-9)return null;[A[i],A[m]]=[A[m],A[i]];[b[i],b[m]]=[b[m],b[i]];const p=A[i][i];for(let c=i;c<n;c++)A[i][c]/=p;b[i]/=p;for(let r=0;r<n;r++)if(r!==i){const f=A[r][i];if(!f)continue;for(let c=i;c<n;c++)A[r][c]-=f*A[i][c];b[r]-=f*b[i]}}return b}
+function homography(src,dst){const A=[],b=[];for(let i=0;i<4;i++){const x=src[i].x,y=src[i].y,u=dst[i].x,v=dst[i].y;A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v)}const h=solveLinear(A,b);return h&&[h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],1]}
+function project(H,x,y){const z=H[6]*x+H[7]*y+1;return{x:(H[0]*x+H[1]*y+H[2])/z,y:(H[3]*x+H[4]*y+H[5])/z}}
+function samplePerspective(img,n,points){const f=5.5,src=[{x:f,y:f},{x:n-f,y:f},{x:n-f,y:n-f},{x:f,y:n-f}],H=homography(src,points);if(!H)return null;const vals=new Uint8Array(n*n);let min=255,max=0;const d=img.data,w=img.width,h=img.height;for(let r=0;r<n;r++)for(let c=0;c<n;c++){const p=project(H,c+.5,r+.5);if(p.x<0||p.y<0||p.x>=w||p.y>=h)return null;let s=0,k=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const x=Math.max(0,Math.min(w-1,Math.round(p.x+dx))),y=Math.max(0,Math.min(h-1,Math.round(p.y+dy))),o=(y*w+x)*4;s+=Math.round(d[o]*.299+d[o+1]*.587+d[o+2]*.114);k++}const v=Math.round(s/k);vals[r*n+c]=v;if(v<min)min=v;if(v>max)max=v}if(max-min<30)return null;const th=otsu(vals),m=new Uint8Array(n*n);for(let i=0;i<m.length;i++)m[i]=vals[i]<th?1:0;return m}
+function sampleCenterROI(img,n){const w=img.width,h=img.height,side=Math.floor(Math.min(w,h)*.82),x0=(w-side)/2,y0=(h-side)/2,vals=new Uint8Array(n*n);let min=255,max=0;for(let r=0;r<n;r++)for(let c=0;c<n;c++){const x=Math.floor(x0+(c+.5)*side/n),y=Math.floor(y0+(r+.5)*side/n),v=grayAt(img.data,w,x,y);vals[r*n+c]=v;min=Math.min(min,v);max=Math.max(max,v)}if(max-min<30)return null;const th=otsu(vals),m=new Uint8Array(n*n);for(let i=0;i<m.length;i++)m[i]=vals[i]<th?1:0;return m}
+function acceptPacket(p){if(completed)return;if(sessionId===null){sessionId=p.sid;totalFrames=p.count}if(p.sid!==sessionId||p.count!==totalFrames)return;if(p.type===1){try{meta=parseMeta(p.payload)}catch(_){}}else if(p.type===2&&p.index<totalFrames&&!chunks.has(p.index))chunks.set(p.index,p.payload);updateProgress();if(meta&&totalFrames>0&&chunks.size===totalFrames)finalizeTransfer()}
+function updateProgress(){progressEl.value=totalFrames?chunks.size/totalFrames:0;let t=`session=${sessionId===null?'-':sessionId.toString(16).padStart(8,'0')} | received=${chunks.size}/${totalFrames}`;if(meta)t+=` | file=${meta.filename} | size=${meta.fileSize} B | chunk=${meta.chunkSize} B`;infoEl.textContent=t}
+async function finalizeTransfer(){if(!meta||completed)return;const size=Number(meta.fileSize);if(!Number.isSafeInteger(size)){setStatus('文件过大，浏览器无法安全重组。','bad');return}const out=new Uint8Array(size);let off=0;for(let i=0;i<totalFrames;i++){const c=chunks.get(i);if(!c)return;const len=Math.min(c.length,size-off);if(len>0){out.set(c.subarray(0,len),off);off+=len}}setStatus('分片接收完成，正在进行 SHA-256 校验……');let dg;try{dg=new Uint8Array(await crypto.subtle.digest('SHA-256',out))}catch(e){setStatus('SHA-256 不可用：'+e.message,'bad');return}if(bytesToHex(dg)!==bytesToHex(meta.sha256)){setStatus('SHA-256 校验失败，请重置后重试。','bad');return}completed=true;setStatus('传输完成，SHA-256 校验通过。','good');const blob=new Blob([out],{type:'application/octet-stream'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=meta.filename||'received.bin';a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)}
+async function startCamera(){if(running)return;if(!window.isSecureContext)setStatus('当前不是 HTTPS 安全上下文，摄像头可能不可用。','bad');if(!navigator.mediaDevices?.getUserMedia){setStatus('浏览器不支持网页摄像头 API。','bad');return}try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30,max:60}}});video.srcObject=stream;await video.play();running=true;lock=null;lastDecodeAt=lastDetectAt=0;setStatus('扫描中：正在寻找四角定位点……','warn');renderLoop()}catch(e){setStatus(`摄像头启动失败：${e.name||''} ${e.message||e}`,'bad')}}
+function stopCamera(){running=false;if(rafId)cancelAnimationFrame(rafId);rafId=0;if(stream){for(const t of stream.getTracks())t.stop();stream=null}video.srcObject=null;setStatus('扫描已停止。')}
+function processFrame(now){const vw=video.videoWidth,vh=video.videoHeight,scale=Math.min(1,PROCESS_MAX/Math.max(vw,vh)),pw=Math.max(1,Math.round(vw*scale)),ph=Math.max(1,Math.round(vh*scale));if(work.width!==pw||work.height!==ph){work.width=pw;work.height=ph}wctx.drawImage(video,0,0,pw,ph);const img=wctx.getImageData(0,0,pw,ph),n=parseInt(gridSelect.value,10),auto=modeSelect.value==='auto';if(auto&&now-lastDetectAt>=DETECT_MS){lastDetectAt=now;detectAttempts++;const found=detectFinders(img);if(found)lock={...found,time:now};else if(lock&&now-lock.time>LOCK_TTL)lock=null}
+ let matrix=null;if(auto&&lock&&now-lock.time<=LOCK_TTL)matrix=samplePerspective(img,n,lock.points);if(!matrix&&(!auto||!lock))matrix=sampleCenterROI(img,n);if(!matrix){badFrames++;return}for(const bytes of allPacketCandidates(matrix,n)){try{const p=parsePacket(bytes);goodFrames++;acceptPacket(p);if(auto&&lock)setStatus(`已锁定四角，正在接收 ${chunks.size}/${totalFrames||'?'}。`,'good');return}catch(_){}}badFrames++}
+function drawOverlay(now){const w=overlay.width,h=overlay.height;ctx.clearRect(0,0,w,h);const auto=modeSelect.value==='auto';if(auto&&lock&&now-lock.time<=LOCK_TTL){const sx=w/work.width,sy=h/work.height;ctx.lineWidth=Math.max(4,w/420);ctx.strokeStyle='rgba(50,255,100,.95)';ctx.beginPath();lock.points.forEach((p,i)=>{const x=p.x*sx,y=p.y*sy;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.closePath();ctx.stroke();for(const p of lock.points){ctx.beginPath();ctx.arc(p.x*sx,p.y*sy,Math.max(7,w/120),0,Math.PI*2);ctx.stroke()}}else{const side=Math.min(w,h)*.82,x=(w-side)/2,y=(h-side)/2;ctx.lineWidth=Math.max(3,w/450);ctx.strokeStyle='rgba(255,205,80,.85)';ctx.strokeRect(x,y,side,side)}}
+function renderLoop(now=performance.now()){if(!running)return;if(video.readyState>=2&&video.videoWidth>0){if(overlay.width!==video.videoWidth||overlay.height!==video.videoHeight){overlay.width=video.videoWidth;overlay.height=video.videoHeight}if(now-lastDecodeAt>=DECODE_MS){lastDecodeAt=now;try{processFrame(now)}catch(e){badFrames++}}drawOverlay(now);diagEl.textContent=`decoder=${modeSelect.value} | lock=${lock&&now-lock.time<=LOCK_TTL?'YES':'NO'} | good=${goodFrames} | misses=${badFrames} | detect=${detectAttempts}`}rafId=requestAnimationFrame(renderLoop)}
+startBtn.addEventListener('click',startCamera);stopBtn.addEventListener('click',stopCamera);resetBtn.addEventListener('click',()=>{resetTransfer();lock=null});gridSelect.addEventListener('change',()=>lock=null);modeSelect.addEventListener('change',()=>lock=null);window.addEventListener('beforeunload',stopCamera);resetTransfer();
 })();
 </script>
 </body>
