@@ -1,152 +1,87 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="color-scheme" content="dark light">
-<title>Visual File Receiver · High Speed</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>VFT2 Handheld Receiver</title>
 <style>
-:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark}
-*{box-sizing:border-box}
-body{margin:0;background:#0b0b0d;color:#f5f5f7}
-main{max-width:900px;margin:0 auto;padding:14px}
-h1{font-size:22px;margin:4px 0 14px}
-.card{background:#17171a;border:1px solid #2a2a2e;border-radius:14px;padding:14px;margin-bottom:12px}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-button,select{border:0;border-radius:10px;padding:10px 14px;font-size:16px}
-button{background:#2f6fed;color:#fff}.secondary{background:#343438}.danger{background:#7a2e2e}
-select{background:#2a2a2d;color:#fff}label{font-size:14px;color:#c6c6c9}
-#stage{position:relative;width:100%;overflow:hidden;border-radius:12px;background:#000;aspect-ratio:3/4}
-video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}#overlay{pointer-events:none}
-progress{width:100%;height:18px}#status{margin:8px 0;line-height:1.45}
-.small{color:#a7a7ad;font-size:13px;line-height:1.45}.good{color:#6ed47d}.bad{color:#ff7373}.warn{color:#ffd166}
-.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
-.badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#2a2a2d;font-size:12px;margin-left:6px}
-.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.metric{background:#101012;border:1px solid #29292d;border-radius:10px;padding:9px}.metric .v{font-size:18px;font-weight:650}.metric .k{font-size:11px;color:#96969d;margin-top:2px}.testbox{margin-top:10px;padding:10px;border:1px dashed #3a3a40;border-radius:10px}@media(max-width:620px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;background:#111;color:#eee}
+body{margin:0;padding:12px;background:#111} h1{font-size:20px;margin:0 0 10px}.card{background:#1d1d20;border:1px solid #333;border-radius:12px;padding:12px;margin-bottom:10px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}button,select{font:inherit;border-radius:9px;border:1px solid #555;background:#29292d;color:#fff;padding:9px 12px}button.primary{background:#1769e0}button.danger{background:#7c2730}video{width:100%;display:block;border-radius:10px;background:#000}.stage{position:relative}.stage canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.small{font-size:12px;color:#bbb;line-height:1.45}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}.good{color:#65dc83}.warn{color:#ffd166}.bad{color:#ff7373}progress{width:100%;height:16px}.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;font-size:12px}.stat{background:#151518;padding:7px;border-radius:7px}.badge{font-size:11px;background:#333;border-radius:999px;padding:3px 7px}
 </style>
 </head>
 <body>
-<main>
-<h1>Visual File Receiver <span class="badge">High-Speed v3</span></h1>
-<section class="card">
+<h1>Visual File Receiver <span class="badge">VFT2 handheld v4</span></h1>
+<div class="card">
   <div class="row">
-    <label>Grid <select id="grid"><option value="auto" selected>自动 64/80/96</option><option value="64">64 × 64</option><option value="80">80 × 80</option><option value="96">96 × 96</option></select></label>
-    <label>定位 <select id="mode"><option value="auto" selected>自动四角</option><option value="fallback">中心框兼容</option></select></label>
-    <label>扫描速度 <select id="speed"><option value="stable">稳健</option><option value="fast" selected>高速</option><option value="turbo">极速</option></select></label>
-    <button id="startBtn">开始扫描</button><button id="stopBtn" class="secondary">停止</button><button id="resetBtn" class="danger">重置</button>
+    <button id="startBtn" class="primary">开始扫描</button><button id="stopBtn">停止</button><button id="resetBtn" class="danger">重置</button>
+    <label>Grid <select id="grid"><option>64</option><option selected>80</option><option>96</option><option>112</option><option>128</option></select></label>
   </div>
-  <div id="status">尚未启动摄像头。</div>
-  <progress id="progress" max="1" value="0"></progress>
-  <div id="info" class="small mono"></div>
-  <div id="diag" class="small mono"></div>
-  <div class="metrics">
-    <div class="metric"><div class="v" id="mDecode">0.0</div><div class="k">解码尝试 FPS</div></div>
-    <div class="metric"><div class="v" id="mValid">0.0</div><div class="k">有效包 FPS</div></div>
-    <div class="metric"><div class="v" id="mRate">0 B/s</div><div class="k">当前吞吐</div></div>
-    <div class="metric"><div class="v" id="mAvg">0 B/s</div><div class="k">平均吞吐</div></div>
-    <div class="metric"><div class="v" id="mErr">0.0%</div><div class="k">CRC / 解码错误</div></div>
-    <div class="metric"><div class="v" id="mEta">--</div><div class="k">预计剩余</div></div>
-  </div>
-  <div class="testbox">
-    <div class="row">
-      <label>Sender FPS <select id="targetFps"><option>2</option><option selected>5</option><option>10</option><option>15</option><option>20</option></select></label>
-      <button id="benchBtn" class="secondary">开始 30 秒测速</button>
-    </div>
-    <div id="benchResult" class="small" style="margin-top:7px">测速会评估当前 Grid/FPS 组合的有效包率和错误率。</div>
-  </div>
-</section>
-<section class="card">
-  <div id="stage"><video id="video" playsinline muted autoplay></video><canvas id="overlay"></canvas></div>
-  <div class="small" style="margin-top:10px">自动模式会检测四个 7×7 定位标记并做透视矫正。Grid 设为“自动”时会自动尝试 64/80/96，并在成功后锁定网格。高速/极速模式会提高浏览器采样频率。</div>
-</section>
-<section class="card"><div class="small">纯 HTML + 内嵌 JavaScript，无 CDN、无 OpenCV.js、无上传逻辑。文件数据只在本机浏览器内重组，并使用 SHA-256 校验。</div></section>
-</main>
+  <div id="status" class="small warn" style="margin-top:8px">等待启动摄像头。</div>
+</div>
+<div class="card stage"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
+<div class="card"><progress id="progress" max="1" value="0"></progress><div id="info" class="small mono" style="margin-top:8px"></div></div>
+<div class="card"><div class="stats">
+  <div class="stat">锁定状态<br><b id="sLock">NO</b></div><div class="stat">有效包 FPS<br><b id="sFps">0.0</b></div>
+  <div class="stat">实时吞吐<br><b id="sLiveRate">0 B/s</b></div><div class="stat">平均吞吐<br><b id="sRate">0 B/s</b></div>
+  <div class="stat">预计剩余<br><b id="sEta">--</b></div><div class="stat">CRC/解码失败<br><b id="sErr">0%</b></div>
+  <div class="stat">已恢复块<br><b id="sBlocks">0/0</b></div><div class="stat">修复方程<br><b id="sEq">0</b></div>
+</div><div id="diag" class="small mono" style="margin-top:8px"></div></div>
+<div class="card small">手持优化：持续四角重定位、角点平滑、短时锁定保持、连续失败时快速重定位。VFT2 同时接收系统块和 XOR repair 块；文件仅在浏览器内重组并做 SHA-256 校验。</div>
+<canvas id="work" style="display:none"></canvas>
 <script>
-(() => {
-'use strict';
-const video=document.getElementById('video'), overlay=document.getElementById('overlay');
-const ctx=overlay.getContext('2d');
-const gridSelect=document.getElementById('grid'), modeSelect=document.getElementById('mode'), speedSelect=document.getElementById('speed');
-const startBtn=document.getElementById('startBtn'), stopBtn=document.getElementById('stopBtn'), resetBtn=document.getElementById('resetBtn'), benchBtn=document.getElementById('benchBtn'), targetFpsEl=document.getElementById('targetFps');
-const statusEl=document.getElementById('status'), infoEl=document.getElementById('info'), diagEl=document.getElementById('diag'), progressEl=document.getElementById('progress');
-const mDecode=document.getElementById('mDecode'),mValid=document.getElementById('mValid'),mRate=document.getElementById('mRate'),mAvg=document.getElementById('mAvg'),mErr=document.getElementById('mErr'),mEta=document.getElementById('mEta'),benchResult=document.getElementById('benchResult');
-const work=document.createElement('canvas'), wctx=work.getContext('2d',{willReadFrequently:true});
-let stream=null,running=false,rafId=0,lastDecodeAt=0,lastDetectAt=0,lock=null;
-let goodFrames=0,badFrames=0,detectAttempts=0,decodeAttempts=0,crcErrors=0,duplicates=0,uniqueBytes=0,firstDataAt=0,lastMetricAt=0,detectedGrid=0,gridMissStreak=0;
-let recentDecode=[],recentValid=[],recentBytes=[];
-let bench=null,benchTimer=0;
-let sessionId=null,totalFrames=0,meta=null,chunks=new Map(),completed=false;
-const HEADER_SIZE=22,BORDER=2,FINDER=7,LOCK_TTL=900;
-const SPEED={stable:{decode:85,process:760},fast:{decode:55,process:800},turbo:{decode:38,process:720}};
+(()=>{'use strict';
+const MAGIC0=0x56,MAGIC1=0x46,VERSION=2,HEADER_SIZE=22,BORDER=2,FINDER=7;
+const PROCESS_MAX=880,DECODE_MS=45,DETECT_NORMAL_MS=260,DETECT_FAST_MS=90,LOCK_TTL=900,SMOOTH=0.38,FAIL_REDETECT=3;
 const FINDERS=[
 [[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],[1,0,1,0,1,0,1],[1,0,1,1,1,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]],
 [[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],[1,0,1,1,0,0,1],[1,0,1,0,1,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]],
 [[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,0,1,0,1],[1,0,0,1,1,0,1],[1,0,1,1,1,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]],
-[[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],[1,0,1,0,0,0,1],[1,0,1,1,0,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]]
-];
-function setStatus(t,k=''){statusEl.textContent=t;statusEl.className=k}
-function resetTransfer(){sessionId=null;totalFrames=0;meta=null;chunks=new Map();completed=false;progressEl.value=0;infoEl.textContent='';goodFrames=badFrames=detectAttempts=decodeAttempts=crcErrors=duplicates=uniqueBytes=0;firstDataAt=lastMetricAt=0;recentDecode=[];recentValid=[];recentBytes=[];detectedGrid=0;gridMissStreak=0;stopBench(false);updateMetrics(performance.now());setStatus('接收状态已重置。')}
-const CRC_TABLE=(()=>{const t=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[i]=c>>>0}return t})();
-function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=(CRC_TABLE[(c^b[i])&255]^(c>>>8))>>>0;return(c^0xFFFFFFFF)>>>0}
-const readU16=(b,o)=>((b[o]<<8)|b[o+1])>>>0;
-function readU32(b,o){return(((b[o]<<24)>>>0)|(b[o+1]<<16)|(b[o+2]<<8)|b[o+3])>>>0}
-function readU64BigInt(b,o){let v=0n;for(let i=0;i<8;i++)v=(v<<8n)|BigInt(b[o+i]);return v}
-function bytesToHex(b){let s='';for(const x of b)s+=x.toString(16).padStart(2,'0');return s}
-function parsePacket(bytes){
- if(!bytes||bytes.length<HEADER_SIZE)throw Error('short');
- if(bytes[0]!==0x56||bytes[1]!==0x46||bytes[2]!==1)throw Error('magic');
- const type=bytes[3],sid=readU32(bytes,4),index=readU32(bytes,8),count=readU32(bytes,12),len=readU16(bytes,16),want=readU32(bytes,18);
- if(type!==1&&type!==2)throw Error('type'); if(count>10000000)throw Error('count'); if(bytes.length<HEADER_SIZE+len)throw Error('truncated');
- const payload=bytes.slice(HEADER_SIZE,HEADER_SIZE+len);if(crc32(payload)!==want)throw Error('crc');return{type,sid,index,count,payload};
-}
-function parseMeta(p){if(p.length<2)throw Error('meta');const nl=readU16(p,0),e=2+nl;if(p.length<e+44)throw Error('meta len');return{filename:new TextDecoder('utf-8').decode(p.slice(2,e)),fileSize:readU64BigInt(p,e),chunkSize:readU32(p,e+8),sha256:p.slice(e+12,e+44)}}
+[[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],[1,0,1,0,0,0,1],[1,0,1,1,0,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]]];
+const $=id=>document.getElementById(id),video=$('video'),overlay=$('overlay'),ctx=overlay.getContext('2d'),work=$('work'),wctx=work.getContext('2d',{willReadFrequently:true});
+const statusEl=$('status'),progressEl=$('progress'),infoEl=$('info'),gridSel=$('grid');
+let stream=null,running=false,raf=0,lastDecode=0,lastDetect=0,lock=null,consecutiveFail=0;
+let attempts=0,valid=0,validTimes=[],bytesAccepted=0,startTs=0,rateEvents=[];
+let sessionId=null,total=0,meta=null,blocks=new Map(),equations=[],completed=false;
 const coordCache=new Map();
-function getDataCoordinates(n){if(coordCache.has(n))return coordCache.get(n);const r=Array.from({length:n},()=>new Uint8Array(n));for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(y<BORDER||y>=n-BORDER||x<BORDER||x>=n-BORDER)r[y][x]=1;const s=[[BORDER,BORDER],[BORDER,n-BORDER-FINDER],[n-BORDER-FINDER,BORDER],[n-BORDER-FINDER,n-BORDER-FINDER]];for(const [y,x] of s)for(let yy=Math.max(0,y-1);yy<Math.min(n,y+FINDER+1);yy++)for(let xx=Math.max(0,x-1);xx<Math.min(n,x+FINDER+1);xx++)r[yy][xx]=1;const t=BORDER+FINDER+1;for(let i=BORDER;i<n-BORDER;i++){r[t][i]=1;r[i][t]=1}const cr=n-BORDER-1,cs=BORDER+FINDER+2;for(let i=0;i<16&&cs+i<n;i++)r[cr][cs+i]=1;const out=[];for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(!r[y][x])out.push([y,x]);coordCache.set(n,out);return out}
-function bitsToUInt32(bits,o=0){let v=0;for(let i=0;i<32;i++)v=v*2+(bits[o+i]||0);return v>>>0}
-function bitsToBytes(bits){const o=new Uint8Array(Math.ceil(bits.length/8));for(let i=0;i<bits.length;i++)o[i>>3]|=bits[i]<<(7-(i&7));return o}
-function matrixToPacketBytes(m,n){const coords=getDataCoordinates(n),bits=new Uint8Array(coords.length);for(let i=0;i<coords.length;i++){const [r,c]=coords[i];bits[i]=m[r*n+c]}if(bits.length<32)return null;const len=bitsToUInt32(bits,0);if(len<=0||len>bits.length-32||len>524280)return null;return bitsToBytes(bits.slice(32,32+len))}
-function transformMatrix(src,n,rot,mirror){const out=new Uint8Array(n*n);for(let r=0;r<n;r++)for(let c=0;c<n;c++){let rr=r,cc=c;if(mirror)cc=n-1-cc;for(let k=0;k<rot;k++){const nr=cc,nc=n-1-rr;rr=nr;cc=nc}out[rr*n+cc]=src[r*n+c]}return out}
-function allPacketCandidates(m,n){const out=[];for(let mir=0;mir<2;mir++)for(let rot=0;rot<4;rot++){const b=matrixToPacketBytes(transformMatrix(m,n,rot,mir),n);if(b)out.push(b)}return out}
-function grayAt(data,w,x,y){x=Math.max(0,Math.min(w-1,x|0));y=Math.max(0,Math.min((data.length/4/w)-1,y|0));const o=(y*w+x)*4;return Math.round(data[o]*.299+data[o+1]*.587+data[o+2]*.114)}
-function otsu(values,max=256){const hist=new Uint32Array(max);for(const v of values)hist[Math.max(0,Math.min(max-1,v|0))]++;let total=values.length,sum=0;for(let i=0;i<max;i++)sum+=i*hist[i];let wb=0,sb=0,best=-1,th=127;for(let t=0;t<max;t++){wb+=hist[t];if(!wb)continue;const wf=total-wb;if(!wf)break;sb+=t*hist[t];const mb=sb/wb,mf=(sum-sb)/wf,v=wb*wf*(mb-mf)*(mb-mf);if(v>best){best=v;th=t}}return th}
-function templateScore(bin,w,h,x0,y0,x1,y1){let best=0;for(const temp of FINDERS){let hit=0,tot=0;for(let r=0;r<7;r++)for(let c=0;c<7;c++){const x=Math.round(x0+(c+.5)*(x1-x0+1)/7),y=Math.round(y0+(r+.5)*(y1-y0+1)/7);if(x>=0&&x<w&&y>=0&&y<h){if(bin[y*w+x]===temp[r][c])hit++;tot++}}best=Math.max(best,hit/Math.max(1,tot))}return best}
-function detectFinders(img){
- const w=img.width,h=img.height,N=w*h,gray=new Uint8Array(N),hist=new Uint32Array(256);for(let i=0,o=0;i<N;i++,o+=4){const g=Math.round(img.data[o]*.299+img.data[o+1]*.587+img.data[o+2]*.114);gray[i]=g;hist[g]++}
- let total=N,sum=0;for(let i=0;i<256;i++)sum+=i*hist[i];let wb=0,sb=0,best=-1,thr=128;for(let t=0;t<256;t++){wb+=hist[t];if(!wb)continue;const wf=total-wb;if(!wf)break;sb+=t*hist[t];const mb=sb/wb,mf=(sum-sb)/wf,v=wb*wf*(mb-mf)*(mb-mf);if(v>best){best=v;thr=t}}
- thr=Math.max(45,Math.min(210,thr));const bin=new Uint8Array(N);for(let i=0;i<N;i++)bin[i]=gray[i]<thr?1:0;
- const seen=new Uint8Array(N),stack=new Int32Array(N),cand=[];const minSide=Math.max(9,Math.floor(Math.min(w,h)*.018)),maxSide=Math.floor(Math.min(w,h)*.22);
- for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const start=y*w+x;if(!bin[start]||seen[start])continue;let sp=0,area=0,minx=x,maxx=x,miny=y,maxy=y;stack[sp++]=start;seen[start]=1;while(sp){const p=stack[--sp],py=(p/w)|0,px=p-py*w;area++;if(px<minx)minx=px;if(px>maxx)maxx=px;if(py<miny)miny=py;if(py>maxy)maxy=py;const ns=[p-1,p+1,p-w,p+w];for(let k=0;k<4;k++){const q=ns[k];if(q>=0&&q<N&&!seen[q]&&bin[q]){seen[q]=1;stack[sp++]=q}}}
-  const bw=maxx-minx+1,bh=maxy-miny+1;if(bw<minSide||bh<minSide||bw>maxSide||bh>maxSide)continue;const ar=bw/bh,fill=area/(bw*bh);if(ar<.62||ar>1.62||fill<.22||fill>.72)continue;const sc=templateScore(bin,w,h,minx,miny,maxx,maxy);if(sc<.72)continue;cand.push({x:(minx+maxx)/2,y:(miny+maxy)/2,w:bw,h:bh,score:sc,area});
- }
- cand.sort((a,b)=>(b.score*2+Math.log1p(b.area))-(a.score*2+Math.log1p(a.area)));const unique=[];for(const c of cand){if(unique.every(u=>Math.hypot(u.x-c.x,u.y-c.y)>Math.min(u.w,c.w)*.7))unique.push(c);if(unique.length>=10)break}if(unique.length<4)return null;
- let bestSet=null,bestScore=-1;const q=unique.slice(0,8);for(let a=0;a<q.length-3;a++)for(let b=a+1;b<q.length-2;b++)for(let c=b+1;c<q.length-1;c++)for(let d=c+1;d<q.length;d++){const set=[q[a],q[b],q[c],q[d]],sizes=set.map(z=>(z.w+z.h)/2),smin=Math.min(...sizes),smax=Math.max(...sizes);if(smax/smin>1.9)continue;const ord=orderQuad(set),areaQ=Math.abs(polyArea(ord));if(areaQ<w*h*.035)continue;const sides=[];for(let i=0;i<4;i++)sides.push(Math.hypot(ord[(i+1)%4].x-ord[i].x,ord[(i+1)%4].y-ord[i].y));const mn=Math.min(...sides),mx=Math.max(...sides);if(mn<Math.min(w,h)*.18||mx/mn>2.5)continue;const score=set.reduce((s,z)=>s+z.score,0)+Math.min(3,areaQ/(w*h)*8)-(smax/smin-1);if(score>bestScore){bestScore=score;bestSet=ord}}
- return bestSet?{points:bestSet,score:bestScore,threshold:thr}:null;
-}
-function polyArea(p){let a=0;for(let i=0;i<p.length;i++){const j=(i+1)%p.length;a+=p[i].x*p[j].y-p[j].x*p[i].y}return a/2}
-function orderQuad(points){const cx=points.reduce((s,p)=>s+p.x,0)/4,cy=points.reduce((s,p)=>s+p.y,0)/4;let q=points.slice().sort((a,b)=>Math.atan2(a.y-cy,a.x-cx)-Math.atan2(b.y-cy,b.x-cx));if(polyArea(q)<0)q.reverse();let idx=0,best=Infinity;for(let i=0;i<4;i++){const v=q[i].x+q[i].y;if(v<best){best=v;idx=i}}return q.slice(idx).concat(q.slice(0,idx))}
-function solveLinear(A,b){const n=b.length;for(let i=0;i<n;i++){let m=i;for(let r=i+1;r<n;r++)if(Math.abs(A[r][i])>Math.abs(A[m][i]))m=r;if(Math.abs(A[m][i])<1e-9)return null;[A[i],A[m]]=[A[m],A[i]];[b[i],b[m]]=[b[m],b[i]];const p=A[i][i];for(let c=i;c<n;c++)A[i][c]/=p;b[i]/=p;for(let r=0;r<n;r++)if(r!==i){const f=A[r][i];if(!f)continue;for(let c=i;c<n;c++)A[r][c]-=f*A[i][c];b[r]-=f*b[i]}}return b}
-function homography(src,dst){const A=[],b=[];for(let i=0;i<4;i++){const x=src[i].x,y=src[i].y,u=dst[i].x,v=dst[i].y;A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v)}const h=solveLinear(A,b);return h&&[h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],1]}
-function project(H,x,y){const z=H[6]*x+H[7]*y+1;return{x:(H[0]*x+H[1]*y+H[2])/z,y:(H[3]*x+H[4]*y+H[5])/z}}
-function samplePerspective(img,n,points){const f=5.5,src=[{x:f,y:f},{x:n-f,y:f},{x:n-f,y:n-f},{x:f,y:n-f}],H=homography(src,points);if(!H)return null;const vals=new Uint8Array(n*n);let min=255,max=0;const d=img.data,w=img.width,h=img.height;for(let r=0;r<n;r++)for(let c=0;c<n;c++){const p=project(H,c+.5,r+.5);if(p.x<0||p.y<0||p.x>=w||p.y>=h)return null;let s=0,k=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const x=Math.max(0,Math.min(w-1,Math.round(p.x+dx))),y=Math.max(0,Math.min(h-1,Math.round(p.y+dy))),o=(y*w+x)*4;s+=Math.round(d[o]*.299+d[o+1]*.587+d[o+2]*.114);k++}const v=Math.round(s/k);vals[r*n+c]=v;if(v<min)min=v;if(v>max)max=v}if(max-min<30)return null;const th=otsu(vals),m=new Uint8Array(n*n);for(let i=0;i<m.length;i++)m[i]=vals[i]<th?1:0;return m}
-function sampleCenterROI(img,n){const w=img.width,h=img.height,side=Math.floor(Math.min(w,h)*.82),x0=(w-side)/2,y0=(h-side)/2,vals=new Uint8Array(n*n);let min=255,max=0;for(let r=0;r<n;r++)for(let c=0;c<n;c++){const x=Math.floor(x0+(c+.5)*side/n),y=Math.floor(y0+(r+.5)*side/n),v=grayAt(img.data,w,x,y);vals[r*n+c]=v;min=Math.min(min,v);max=Math.max(max,v)}if(max-min<30)return null;const th=otsu(vals),m=new Uint8Array(n*n);for(let i=0;i<m.length;i++)m[i]=vals[i]<th?1:0;return m}
-function acceptPacket(p,now){if(completed)return{accepted:false,newData:false};if(sessionId===null){sessionId=p.sid;totalFrames=p.count}if(p.sid!==sessionId||p.count!==totalFrames)return{accepted:false,newData:false};if(p.type===1){try{meta=parseMeta(p.payload)}catch(_){return{accepted:false,newData:false}}updateProgress();return{accepted:true,newData:false}}if(p.type===2&&p.index<totalFrames){if(chunks.has(p.index)){duplicates++;return{accepted:true,newData:false}}chunks.set(p.index,p.payload);uniqueBytes+=p.payload.length;if(!firstDataAt)firstDataAt=now;recentBytes.push([now,p.payload.length]);updateProgress();if(meta&&totalFrames>0&&chunks.size===totalFrames)finalizeTransfer();return{accepted:true,newData:true}}return{accepted:false,newData:false}}
-function updateProgress(){progressEl.value=totalFrames?chunks.size/totalFrames:0;let t=`session=${sessionId===null?'-':sessionId.toString(16).padStart(8,'0')} | grid=${detectedGrid||gridSelect.value} | received=${chunks.size}/${totalFrames} | missing=${Math.max(0,totalFrames-chunks.size)} | dup=${duplicates}`;if(meta)t+=` | file=${meta.filename} | size=${meta.fileSize} B | chunk=${meta.chunkSize} B`;infoEl.textContent=t}
-function fmtRate(v){if(!isFinite(v)||v<=0)return'0 B/s';if(v>=1024*1024)return(v/1024/1024).toFixed(2)+' MB/s';if(v>=1024)return(v/1024).toFixed(2)+' KB/s';return Math.round(v)+' B/s'}
-function fmtEta(sec){if(!isFinite(sec)||sec<0)return'--';sec=Math.ceil(sec);if(sec<60)return sec+'s';const m=Math.floor(sec/60),s=sec%60;return`${m}m ${s}s`}
-function trimRecent(arr,now,windowMs=3000){while(arr.length&&arr[0][0]<now-windowMs)arr.shift()}
-function updateMetrics(now){trimRecent(recentDecode,now);trimRecent(recentValid,now);trimRecent(recentBytes,now);const win=3;const dfps=recentDecode.length/win,vfps=recentValid.length/win;let rb=0;for(const x of recentBytes)rb+=x[1];const rate=rb/win,avg=firstDataAt&&now>firstDataAt?uniqueBytes/((now-firstDataAt)/1000):0;const err=decodeAttempts?100*badFrames/decodeAttempts:0;let eta=Infinity;if(meta&&totalFrames&&rate>0){const remain=Math.max(0,totalFrames-chunks.size)*meta.chunkSize;eta=remain/rate}mDecode.textContent=dfps.toFixed(1);mValid.textContent=vfps.toFixed(1);mRate.textContent=fmtRate(rate);mAvg.textContent=fmtRate(avg);mErr.textContent=err.toFixed(1)+'%';mEta.textContent=fmtEta(eta)}
-function startBench(){if(bench){stopBench(true);return}const now=performance.now();bench={start:now,end:now+30000,good0:goodFrames,bad0:badFrames,crc0:crcErrors,bytes0:uniqueBytes,target:parseFloat(targetFpsEl.value),grid:gridSelect.value};benchBtn.textContent='停止测速';benchResult.textContent='测速中：30 秒…';benchTimer=setInterval(()=>{if(!bench)return;const left=Math.max(0,Math.ceil((bench.end-performance.now())/1000));benchResult.textContent=`测速中：剩余 ${left}s | 当前有效包 ${mValid.textContent} FPS | 错误 ${mErr.textContent}`;if(performance.now()>=bench.end)finishBench()},250)}
-function finishBench(){if(!bench)return;const b=bench,sec=Math.max(1,(performance.now()-b.start)/1000),g=goodFrames-b.good0,bad=badFrames-b.bad0,crc=crcErrors-b.crc0,bytes=uniqueBytes-b.bytes0;const valid=g/sec,ratio=Math.min(1,valid/Math.max(.1,b.target)),err=bad/Math.max(1,g+bad),rate=bytes/sec;let verdict='不建议';let cls='bad';if(ratio>=.82&&err<=.12){verdict='稳定可用';cls='good'}else if(ratio>=.55&&err<=.3){verdict='边缘可用';cls='warn'}benchResult.innerHTML=`<span class="${cls}">${verdict}</span> | grid=${detectedGrid||b.grid} | target=${b.target} FPS | valid=${valid.toFixed(1)} FPS | 有效率=${(ratio*100).toFixed(0)}% | error=${(err*100).toFixed(1)}% | CRC=${crc} | 吞吐=${fmtRate(rate)}`;stopBench(false)}
-function stopBench(updateText=true){if(benchTimer){clearInterval(benchTimer);benchTimer=0}if(bench&&updateText)benchResult.textContent='测速已停止。';bench=null;benchBtn.textContent='开始 30 秒测速'}
-async function finalizeTransfer(){if(!meta||completed)return;const size=Number(meta.fileSize);if(!Number.isSafeInteger(size)){setStatus('文件过大，浏览器无法安全重组。','bad');return}const out=new Uint8Array(size);let off=0;for(let i=0;i<totalFrames;i++){const c=chunks.get(i);if(!c)return;const len=Math.min(c.length,size-off);if(len>0){out.set(c.subarray(0,len),off);off+=len}}setStatus('分片接收完成，正在进行 SHA-256 校验……');let dg;try{dg=new Uint8Array(await crypto.subtle.digest('SHA-256',out))}catch(e){setStatus('SHA-256 不可用：'+e.message,'bad');return}if(bytesToHex(dg)!==bytesToHex(meta.sha256)){setStatus('SHA-256 校验失败，请重置后重试。','bad');return}completed=true;setStatus('传输完成，SHA-256 校验通过。','good');const blob=new Blob([out],{type:'application/octet-stream'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=meta.filename||'received.bin';a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)}
-async function startCamera(){if(running)return;if(!window.isSecureContext)setStatus('当前不是 HTTPS 安全上下文，摄像头可能不可用。','bad');if(!navigator.mediaDevices?.getUserMedia){setStatus('浏览器不支持网页摄像头 API。','bad');return}try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:60,min:24,max:60}}});video.srcObject=stream;await video.play();running=true;lock=null;lastDecodeAt=lastDetectAt=0;setStatus('扫描中：正在寻找四角定位点……','warn');renderLoop()}catch(e){setStatus(`摄像头启动失败：${e.name||''} ${e.message||e}`,'bad')}}
-function stopCamera(){running=false;if(rafId)cancelAnimationFrame(rafId);rafId=0;if(stream){for(const t of stream.getTracks())t.stop();stream=null}video.srcObject=null;setStatus('扫描已停止。')}
-function processFrame(now){decodeAttempts++;recentDecode.push([now,1]);const cfg=SPEED[speedSelect.value]||SPEED.fast;const vw=video.videoWidth,vh=video.videoHeight,scale=Math.min(1,cfg.process/Math.max(vw,vh)),pw=Math.max(1,Math.round(vw*scale)),ph=Math.max(1,Math.round(vh*scale));if(work.width!==pw||work.height!==ph){work.width=pw;work.height=ph}wctx.drawImage(video,0,0,pw,ph);const img=wctx.getImageData(0,0,pw,ph),auto=modeSelect.value==='auto';const detectMs=lock?320:150;if(auto&&now-lastDetectAt>=detectMs){lastDetectAt=now;detectAttempts++;const found=detectFinders(img);if(found)lock={...found,time:now};else if(lock&&now-lock.time>LOCK_TTL)lock=null}
- const selected=gridSelect.value;let grids=selected==='auto'?(detectedGrid&&gridMissStreak<8?[detectedGrid]:[detectedGrid,64,80,96].filter((v,i,a)=>v&&a.indexOf(v)===i)):[parseInt(selected,10)];let anyMatrix=false,sawCRC=false;for(const n of grids){let matrix=null;if(auto&&lock&&now-lock.time<=LOCK_TTL)matrix=samplePerspective(img,n,lock.points);if(!matrix&&(!auto||!lock))matrix=sampleCenterROI(img,n);if(!matrix)continue;anyMatrix=true;for(const bytes of allPacketCandidates(matrix,n)){try{const p=parsePacket(bytes);goodFrames++;recentValid.push([now,1]);detectedGrid=n;gridMissStreak=0;const r=acceptPacket(p,now);if(auto&&lock)setStatus(`已锁定四角 · ${n}×${n} · 接收 ${chunks.size}/${totalFrames||'?'}。`,'good');return}catch(e){if(e&&e.message==='crc')sawCRC=true}}}badFrames++;gridMissStreak++;if(sawCRC)crcErrors++;if(!anyMatrix&&auto&&lock&&now-lock.time>LOCK_TTL)lock=null}
-function drawOverlay(now){const w=overlay.width,h=overlay.height;ctx.clearRect(0,0,w,h);const auto=modeSelect.value==='auto';if(auto&&lock&&now-lock.time<=LOCK_TTL){const sx=w/work.width,sy=h/work.height;ctx.lineWidth=Math.max(4,w/420);ctx.strokeStyle='rgba(50,255,100,.95)';ctx.beginPath();lock.points.forEach((p,i)=>{const x=p.x*sx,y=p.y*sy;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.closePath();ctx.stroke();for(const p of lock.points){ctx.beginPath();ctx.arc(p.x*sx,p.y*sy,Math.max(7,w/120),0,Math.PI*2);ctx.stroke()}}else{const side=Math.min(w,h)*.82,x=(w-side)/2,y=(h-side)/2;ctx.lineWidth=Math.max(3,w/450);ctx.strokeStyle='rgba(255,205,80,.85)';ctx.strokeRect(x,y,side,side)}}
-function renderLoop(now=performance.now()){if(!running)return;if(video.readyState>=2&&video.videoWidth>0){if(overlay.width!==video.videoWidth||overlay.height!==video.videoHeight){overlay.width=video.videoWidth;overlay.height=video.videoHeight}const cfg=SPEED[speedSelect.value]||SPEED.fast;if(now-lastDecodeAt>=cfg.decode){lastDecodeAt=now;try{processFrame(now)}catch(e){badFrames++;decodeAttempts++;recentDecode.push([now,1])}}drawOverlay(now);if(!lastMetricAt||now-lastMetricAt>250){lastMetricAt=now;updateMetrics(now)}diagEl.textContent=`mode=${modeSelect.value} | grid=${detectedGrid||gridSelect.value} | lock=${lock&&now-lock.time<=LOCK_TTL?'YES':'NO'} | good=${goodFrames} | miss=${badFrames} | crc=${crcErrors} | dup=${duplicates} | detect=${detectAttempts}`}rafId=requestAnimationFrame(renderLoop)}
-startBtn.addEventListener('click',startCamera);stopBtn.addEventListener('click',stopCamera);resetBtn.addEventListener('click',()=>{resetTransfer();lock=null});benchBtn.addEventListener('click',startBench);gridSelect.addEventListener('change',()=>{lock=null;detectedGrid=0;gridMissStreak=0});modeSelect.addEventListener('change',()=>lock=null);speedSelect.addEventListener('change',()=>{lastDecodeAt=0});window.addEventListener('beforeunload',()=>{stopBench(false);stopCamera()});resetTransfer();
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function setStatus(t,k='warn'){statusEl.textContent=t;statusEl.className='small '+k}
+function crc32(b){let c=0xffffffff;for(const x of b)c=(CRC_TABLE[(c^x)&255]^(c>>>8))>>>0;return(c^0xffffffff)>>>0}
+function u16(b,o){return(b[o]<<8)|b[o+1]} function u32(b,o){return(((b[o]<<24)>>>0)|(b[o+1]<<16)|(b[o+2]<<8)|b[o+3])>>>0}
+function u64(b,o){let v=0n;for(let i=0;i<8;i++)v=(v<<8n)|BigInt(b[o+i]);return v} function hex(b){return[...b].map(x=>x.toString(16).padStart(2,'0')).join('')}
+function parsePacket(b){if(b.length<HEADER_SIZE)throw Error('short');if(b[0]!==MAGIC0||b[1]!==MAGIC1||b[2]!==VERSION)throw Error('magic/ver');const type=b[3],sid=u32(b,4),idx=u32(b,8),count=u32(b,12),len=u16(b,16),crc=u32(b,18);if(![1,2,3].includes(type)||HEADER_SIZE+len>b.length)throw Error('header');const p=b.slice(HEADER_SIZE,HEADER_SIZE+len);if(crc32(p)!==crc)throw Error('crc');return{type,sid,idx,count,payload:p}}
+function parseMeta(p){const nl=u16(p,0),e=2+nl;if(p.length<e+45)throw Error('meta');return{filename:new TextDecoder().decode(p.slice(2,e)),fileSize:u64(p,e),blockSize:u32(p,e+8),sha:p.slice(e+12,e+44),codec:p[e+44]}}
+function getCoords(n){if(coordCache.has(n))return coordCache.get(n);const r=Array.from({length:n},()=>new Uint8Array(n));for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(y<BORDER||y>=n-BORDER||x<BORDER||x>=n-BORDER)r[y][x]=1;for(const [y,x] of [[BORDER,BORDER],[BORDER,n-BORDER-FINDER],[n-BORDER-FINDER,BORDER],[n-BORDER-FINDER,n-BORDER-FINDER]])for(let yy=Math.max(0,y-1);yy<Math.min(n,y+FINDER+1);yy++)for(let xx=Math.max(0,x-1);xx<Math.min(n,x+FINDER+1);xx++)r[yy][xx]=1;const t=BORDER+FINDER+1;for(let i=BORDER;i<n-BORDER;i++){r[t][i]=1;r[i][t]=1}const cr=n-BORDER-1,cs=BORDER+FINDER+2;for(let i=0;i<16&&cs+i<n;i++)r[cr][cs+i]=1;const out=[];for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(!r[y][x])out.push([y,x]);coordCache.set(n,out);return out}
+function bitsU32(bits,o=0){let v=0;for(let i=0;i<32;i++)v=v*2+(bits[o+i]||0);return v>>>0} function bitsBytes(bits){const o=new Uint8Array(Math.ceil(bits.length/8));for(let i=0;i<bits.length;i++)o[i>>3]|=bits[i]<<(7-(i&7));return o}
+function matrixBytes(m,n){const c=getCoords(n),bits=new Uint8Array(c.length);for(let i=0;i<c.length;i++){const [r,x]=c[i];bits[i]=m[r*n+x]}const len=bitsU32(bits);if(!len||len>bits.length-32)return null;return bitsBytes(bits.slice(32,32+len))}
+function transform(src,n,rot,mir){const o=new Uint8Array(n*n);for(let r=0;r<n;r++)for(let c=0;c<n;c++){let rr=r,cc=mir?n-1-c:c;for(let k=0;k<rot;k++){const nr=cc,nc=n-1-rr;rr=nr;cc=nc}o[rr*n+cc]=src[r*n+c]}return o}
+function candidates(m,n){const a=[];for(let mir=0;mir<2;mir++)for(let rot=0;rot<4;rot++){const b=matrixBytes(transform(m,n,rot,mir),n);if(b)a.push(b)}return a}
+function otsu(v){const h=new Uint32Array(256);for(const x of v)h[x]++;let sum=0;for(let i=0;i<256;i++)sum+=i*h[i];let wb=0,sb=0,best=-1,t=127;for(let i=0;i<256;i++){wb+=h[i];if(!wb)continue;const wf=v.length-wb;if(!wf)break;sb+=i*h[i];const mb=sb/wb,mf=(sum-sb)/wf,z=wb*wf*(mb-mf)*(mb-mf);if(z>best){best=z;t=i}}return t}
+function templateScore(bin,w,h,x0,y0,x1,y1){let best=0;for(const temp of FINDERS){let hit=0,tot=0;for(let r=0;r<7;r++)for(let c=0;c<7;c++){const x=Math.round(x0+(c+.5)*(x1-x0+1)/7),y=Math.round(y0+(r+.5)*(y1-y0+1)/7);if(x>=0&&x<w&&y>=0&&y<h){hit+=bin[y*w+x]===temp[r][c];tot++}}best=Math.max(best,hit/Math.max(1,tot))}return best}
+function polyArea(p){let a=0;for(let i=0;i<4;i++){const j=(i+1)%4;a+=p[i].x*p[j].y-p[j].x*p[i].y}return a/2}
+function orderQuad(points){const cx=points.reduce((s,p)=>s+p.x,0)/4,cy=points.reduce((s,p)=>s+p.y,0)/4;let q=points.slice().sort((a,b)=>Math.atan2(a.y-cy,a.x-cx)-Math.atan2(b.y-cy,b.x-cx));if(polyArea(q)<0)q.reverse();let k=0,b=1e9;for(let i=0;i<4;i++){const v=q[i].x+q[i].y;if(v<b){b=v;k=i}}return q.slice(k).concat(q.slice(0,k))}
+function detect(img){const w=img.width,h=img.height,N=w*h,g=new Uint8Array(N);for(let i=0,o=0;i<N;i++,o+=4)g[i]=Math.round(img.data[o]*.299+img.data[o+1]*.587+img.data[o+2]*.114);const th=Math.max(45,Math.min(210,otsu(g))),bin=new Uint8Array(N);for(let i=0;i<N;i++)bin[i]=g[i]<th?1:0;const seen=new Uint8Array(N),stack=new Int32Array(N),cand=[],minSide=Math.max(8,Math.floor(Math.min(w,h)*.014)),maxSide=Math.floor(Math.min(w,h)*.25);for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const s=y*w+x;if(!bin[s]||seen[s])continue;let sp=0,area=0,minx=x,maxx=x,miny=y,maxy=y;stack[sp++]=s;seen[s]=1;while(sp){const p=stack[--sp],py=(p/w)|0,px=p-py*w;area++;minx=Math.min(minx,px);maxx=Math.max(maxx,px);miny=Math.min(miny,py);maxy=Math.max(maxy,py);for(const q of [p-1,p+1,p-w,p+w])if(q>=0&&q<N&&!seen[q]&&bin[q]){seen[q]=1;stack[sp++]=q}}const bw=maxx-minx+1,bh=maxy-miny+1;if(bw<minSide||bh<minSide||bw>maxSide||bh>maxSide)continue;const ar=bw/bh,fill=area/(bw*bh);if(ar<.58||ar>1.72||fill<.19||fill>.76)continue;const sc=templateScore(bin,w,h,minx,miny,maxx,maxy);if(sc>.68)cand.push({x:(minx+maxx)/2,y:(miny+maxy)/2,w:bw,h:bh,score:sc,area})}cand.sort((a,b)=>(b.score*2+Math.log1p(b.area))-(a.score*2+Math.log1p(a.area)));const u=[];for(const c of cand){if(u.every(z=>Math.hypot(z.x-c.x,z.y-c.y)>Math.min(z.w,c.w)*.65))u.push(c);if(u.length>=10)break}if(u.length<4)return null;let best=null,bs=-1;const q=u.slice(0,8);for(let a=0;a<q.length-3;a++)for(let b=a+1;b<q.length-2;b++)for(let c=b+1;c<q.length-1;c++)for(let d=c+1;d<q.length;d++){const set=[q[a],q[b],q[c],q[d]],ord=orderQuad(set),A=Math.abs(polyArea(ord));if(A<w*h*.025)continue;const sizes=set.map(z=>(z.w+z.h)/2);if(Math.max(...sizes)/Math.min(...sizes)>2.2)continue;const sides=ord.map((z,i)=>Math.hypot(ord[(i+1)%4].x-z.x,ord[(i+1)%4].y-z.y)),mn=Math.min(...sides),mx=Math.max(...sides);if(mn<Math.min(w,h)*.14||mx/mn>3.0)continue;const sc=set.reduce((s,z)=>s+z.score,0)+Math.min(3,A/(w*h)*8);if(sc>bs){bs=sc;best=ord}}return best?{points:best,score:bs}:null}
+function smoothPoints(oldp,newp){if(!oldp)return newp;const disp=newp.reduce((s,p,i)=>s+Math.hypot(p.x-oldp[i].x,p.y-oldp[i].y),0)/4;const side=oldp.reduce((s,p,i)=>s+Math.hypot(p.x-oldp[(i+1)%4].x,p.y-oldp[(i+1)%4].y),0)/4;if(disp>side*.55)return newp;const a=disp>side*.08?.62:SMOOTH;return newp.map((p,i)=>({x:oldp[i].x*(1-a)+p.x*a,y:oldp[i].y*(1-a)+p.y*a}))}
+function solve(A,b){const n=b.length;for(let i=0;i<n;i++){let m=i;for(let r=i+1;r<n;r++)if(Math.abs(A[r][i])>Math.abs(A[m][i]))m=r;if(Math.abs(A[m][i])<1e-9)return null;[A[i],A[m]]=[A[m],A[i]];[b[i],b[m]]=[b[m],b[i]];const p=A[i][i];for(let c=i;c<n;c++)A[i][c]/=p;b[i]/=p;for(let r=0;r<n;r++)if(r!==i){const f=A[r][i];for(let c=i;c<n;c++)A[r][c]-=f*A[i][c];b[r]-=f*b[i]}}return b}
+function H(src,dst){const A=[],b=[];for(let i=0;i<4;i++){const {x,y}=src[i],u=dst[i].x,v=dst[i].y;A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v)}const h=solve(A,b);return h&&[...h,1]}
+function proj(h,x,y){const z=h[6]*x+h[7]*y+1;return{x:(h[0]*x+h[1]*y+h[2])/z,y:(h[3]*x+h[4]*y+h[5])/z}}
+function sample(img,n,pts){const f=5.5,h=H([{x:f,y:f},{x:n-f,y:f},{x:n-f,y:n-f},{x:f,y:n-f}],pts);if(!h)return null;const vals=new Uint8Array(n*n),d=img.data,w=img.width,hh=img.height;let lo=255,hi=0;for(let r=0;r<n;r++)for(let c=0;c<n;c++){const p=proj(h,c+.5,r+.5);if(p.x<1||p.y<1||p.x>=w-1||p.y>=hh-1)return null;let s=0;for(const [dx,dy] of [[0,0],[-.35,0],[.35,0],[0,-.35],[0,.35]]){const x=Math.round(p.x+dx),y=Math.round(p.y+dy),o=(y*w+x)*4;s+=Math.round(d[o]*.299+d[o+1]*.587+d[o+2]*.114)}const v=Math.round(s/5);vals[r*n+c]=v;lo=Math.min(lo,v);hi=Math.max(hi,v)}if(hi-lo<28)return null;const th=otsu(vals),m=new Uint8Array(n*n);for(let i=0;i<m.length;i++)m[i]=vals[i]<th?1:0;return m}
+function xorshift32(x){x>>>=0;x^=(x<<13)>>>0;x^=x>>>17;x^=(x<<5)>>>0;return x>>>0}
+function repairIndices(seed,degree,k){degree=Math.max(1,Math.min(degree,k));const out=[];let st=(seed>>>0)||0xA341316C;while(out.length<degree){st=xorshift32(st);const i=st%k;if(!out.includes(i))out.push(i)}return out}
+function xorInto(a,b){for(let i=0;i<a.length;i++)a[i]^=b[i]}
+function accountBytes(n){bytesAccepted+=n;rateEvents.push([performance.now(),n]);const cutoff=performance.now()-5000;while(rateEvents.length&&rateEvents[0][0]<cutoff)rateEvents.shift()}
+function reduceEquation(eq){const remain=[];for(const i of eq.idxs){const b=blocks.get(i);if(b)xorInto(eq.data,b);else remain.push(i)}eq.idxs=remain}
+function peel(){let changed=true;while(changed){changed=false;for(const eq of equations){if(eq.done)continue;reduceEquation(eq);if(eq.idxs.length===0){eq.done=true;continue}if(eq.idxs.length===1){const i=eq.idxs[0];if(!blocks.has(i)){blocks.set(i,eq.data.slice());accountBytes(eq.data.length);changed=true}eq.done=true}}if(changed)for(const eq of equations)if(!eq.done)reduceEquation(eq)}equations=equations.filter(e=>!e.done&&e.idxs.length>1).slice(-800)}
+function reset(){sessionId=null;total=0;meta=null;blocks=new Map();equations=[];completed=false;attempts=valid=bytesAccepted=0;validTimes=[];rateEvents=[];startTs=performance.now();progressEl.value=0;lock=null;consecutiveFail=0;updateUI();setStatus('接收状态已重置。')}
+function accept(p){if(completed)return;if(sessionId===null){sessionId=p.sid;total=p.count;startTs=performance.now()}if(p.sid!==sessionId||p.count!==total)return;if(p.type===1){try{meta=parseMeta(p.payload)}catch(_){}}else if(p.type===2&&p.idx<total&&!blocks.has(p.idx)){blocks.set(p.idx,p.payload.slice());accountBytes(p.payload.length);peel()}else if(p.type===3&&p.payload.length>=5){const seed=u32(p.payload,0),degree=p.payload[4],data=p.payload.slice(5);if(meta&&data.length===meta.blockSize){const eq={idxs:repairIndices(seed,degree,total),data:data.slice(),done:false};reduceEquation(eq);if(eq.idxs.length===1&&!blocks.has(eq.idxs[0])){blocks.set(eq.idxs[0],eq.data.slice());accountBytes(eq.data.length);peel()}else if(eq.idxs.length>1)equations.push(eq)}}updateUI();if(meta&&blocks.size===total)finish()}
+function fmtRate(x){return x<1024?`${x.toFixed(0)} B/s`:`${(x/1024).toFixed(2)} KB/s`}
+function updateUI(){progressEl.value=total?blocks.size/total:0;const now=performance.now(),elapsed=Math.max(.001,(now-startTs)/1000),rate=bytesAccepted/elapsed;const win=2000,cut=now-win;while(rateEvents.length&&rateEvents[0][0]<now-5000)rateEvents.shift();let liveBytes=0,first=now;for(const e of rateEvents)if(e[0]>=cut){liveBytes+=e[1];first=Math.min(first,e[0])}const liveSpan=Math.max(.25,(now-Math.max(cut,first))/1000),liveRate=liveBytes/liveSpan;let eta='--';if(meta&&liveRate>1){const remain=Math.max(0,Number(meta.fileSize)-Math.min(Number(meta.fileSize),blocks.size*meta.blockSize));const sec=remain/liveRate;eta=sec<60?`${Math.ceil(sec)} s`:`${Math.floor(sec/60)}m ${Math.ceil(sec%60)}s`}infoEl.textContent=`session=${sessionId===null?'-':sessionId.toString(16).padStart(8,'0')} | blocks=${blocks.size}/${total||'?'}${meta?` | file=${meta.filename} | size=${meta.fileSize} B | block=${meta.blockSize} B`:''}`;$('sBlocks').textContent=`${blocks.size}/${total||0}`;$('sEq').textContent=equations.length;$('sLiveRate').textContent=fmtRate(liveRate);$('sRate').textContent=fmtRate(rate);$('sEta').textContent=eta;$('sErr').textContent=attempts?`${((attempts-valid)/attempts*100).toFixed(1)}%`:'0%';validTimes=validTimes.filter(t=>now-t<3000);$('sFps').textContent=(validTimes.length/3).toFixed(1);$('sLock').textContent=lock&&now-lock.time<LOCK_TTL?'YES':'NO'}
+async function finish(){if(!meta||completed)return;const size=Number(meta.fileSize);if(!Number.isSafeInteger(size))return setStatus('文件过大。','bad');const out=new Uint8Array(size);let off=0;for(let i=0;i<total;i++){const b=blocks.get(i);if(!b)return;const n=Math.min(b.length,size-off);if(n>0){out.set(b.subarray(0,n),off);off+=n}}setStatus('正在进行 SHA-256 校验…');const dg=new Uint8Array(await crypto.subtle.digest('SHA-256',out));if(hex(dg)!==hex(meta.sha))return setStatus('SHA-256 校验失败。','bad');completed=true;setStatus('完成：SHA-256 校验通过。','good');const url=URL.createObjectURL(new Blob([out],{type:'application/octet-stream'})),a=document.createElement('a');a.href=url;a.download=meta.filename||'received.bin';a.click();setTimeout(()=>URL.revokeObjectURL(url),60000)}
+async function start(){if(running)return;if(!navigator.mediaDevices?.getUserMedia)return setStatus('当前浏览器无法调用摄像头。','bad');try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:60,min:24}}});video.srcObject=stream;await video.play();running=true;lastDecode=lastDetect=0;setStatus('扫描中：请让四个角尽量保持在画面内。');loop()}catch(e){setStatus(`摄像头启动失败：${e.name} ${e.message}`,'bad')}}
+function stop(){running=false;if(raf)cancelAnimationFrame(raf);if(stream)for(const t of stream.getTracks())t.stop();stream=null;video.srcObject=null;setStatus('扫描已停止。')}
+function process(now){const vw=video.videoWidth,vh=video.videoHeight,sc=Math.min(1,PROCESS_MAX/Math.max(vw,vh)),pw=Math.round(vw*sc),ph=Math.round(vh*sc);if(work.width!==pw||work.height!==ph){work.width=pw;work.height=ph}wctx.drawImage(video,0,0,pw,ph);const img=wctx.getImageData(0,0,pw,ph),detectMs=consecutiveFail>=FAIL_REDETECT?DETECT_FAST_MS:DETECT_NORMAL_MS;if(now-lastDetect>=detectMs){lastDetect=now;const f=detect(img);if(f){const pts=smoothPoints(lock?.points,f.points);lock={points:pts,score:f.score,time:now}}else if(lock&&now-lock.time>LOCK_TTL)lock=null}if(!lock||now-lock.time>LOCK_TTL){consecutiveFail++;attempts++;updateUI();return}const n=parseInt(gridSel.value,10),m=sample(img,n,lock.points);attempts++;if(!m){consecutiveFail++;updateUI();return}for(const b of candidates(m,n)){try{const p=parsePacket(b);valid++;validTimes.push(now);consecutiveFail=0;accept(p);setStatus(`已锁定，接收 ${blocks.size}/${total||'?'}。`,'good');return}catch(_){}}consecutiveFail++;updateUI()}
+function draw(now){if(overlay.width!==video.videoWidth||overlay.height!==video.videoHeight){overlay.width=video.videoWidth;overlay.height=video.videoHeight}ctx.clearRect(0,0,overlay.width,overlay.height);const sx=overlay.width/work.width,sy=overlay.height/work.height;if(lock&&now-lock.time<LOCK_TTL){ctx.strokeStyle='rgba(72,255,120,.95)';ctx.lineWidth=Math.max(4,overlay.width/450);ctx.beginPath();lock.points.forEach((p,i)=>i?ctx.lineTo(p.x*sx,p.y*sy):ctx.moveTo(p.x*sx,p.y*sy));ctx.closePath();ctx.stroke()}else{ctx.strokeStyle='rgba(255,195,80,.9)';ctx.lineWidth=4;const s=Math.min(overlay.width,overlay.height)*.82;ctx.strokeRect((overlay.width-s)/2,(overlay.height-s)/2,s,s)}$('diag').textContent=`motion_fail=${consecutiveFail} | attempts=${attempts} | valid=${valid} | lock_age=${lock?Math.round(now-lock.time):'-'}ms`}
+function loop(now=performance.now()){if(!running)return;if(video.readyState>=2&&video.videoWidth){if(now-lastDecode>=DECODE_MS){lastDecode=now;try{process(now)}catch(e){consecutiveFail++}}draw(now)}raf=requestAnimationFrame(loop)}
+$('startBtn').onclick=start;$('stopBtn').onclick=stop;$('resetBtn').onclick=reset;gridSel.onchange=()=>{lock=null;consecutiveFail=FAIL_REDETECT};window.addEventListener('beforeunload',stop);reset();
 })();
 </script>
-</body>
-</html>
+</body></html>
